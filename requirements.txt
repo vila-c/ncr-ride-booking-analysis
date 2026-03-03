@@ -5,5 +5,5 @@ seaborn
 plotly
 scikit-learn
 networkx
-streamlit
-altair
+altair>=5.0.0
+streamlit>=1.30.0
