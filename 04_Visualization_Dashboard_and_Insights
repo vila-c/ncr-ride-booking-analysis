@@ -1,0 +1,51 @@
+ 1. Overall Completion Rate
+────────────────────────────────────────────────────────────
+  In this dataset, 62.1% of trips were successfully completed.
+  That means roughly 37.9% of bookings didn't work out. The
+  two biggest reasons were 'No Driver Found' (7.0%) and
+  'Driver Cancelled' (18.0%). Together, these two account for
+  most of the failed rides — which suggests the problem is
+  more on the supply side than the customer side.
+
+────────────────────────────────────────────────────────────
+  2. Rush Hour Has More Cancellations
+────────────────────────────────────────────────────────────
+  During morning and evening rush hours (7–9 AM and 5–8 PM),
+  the cancellation rate goes up to 38.0%, compared to 37.8%
+  during quieter hours. That's a 0.1% difference. This makes
+  sense — when everyone is trying to book at the same time,
+  there simply aren't enough drivers to go around.
+
+────────────────────────────────────────────────────────────
+  3. Some Areas Are Harder to Get a Ride
+────────────────────────────────────────────────────────────
+  'Kashmere Gate ISBT' has one of the highest cancellation
+  rates at 47.1%. Areas like Noida Sector and Gurgaon Sector
+  also show up repeatedly as high-risk zones. This could be
+  because drivers avoid these routes, or because traffic makes
+  it harder to complete the trip — either way, users in these
+  areas consistently have a worse experience.
+
+────────────────────────────────────────────────────────────
+  4. Not Everyone Gets Equal Service
+────────────────────────────────────────────────────────────
+  Looking at the data, areas that are further from the city
+  centre or seem to be lower-income tend to have higher
+  cancellation rates and longer wait times. This is something
+  I found worth highlighting — if a platform only focuses on
+  profitable routes, it might unintentionally make it harder
+  for some people to get around. This isn't just a business
+  problem, it's a fairness issue too.
+
+────────────────────────────────────────────────────────────
+  5. What the Model Suggests We Can Do
+────────────────────────────────────────────────────────────
+  Based on the Random Forest model from Notebook 03, the two
+  strongest predictors of cancellation are ride distance and
+  time of day. From this, a few practical ideas come to mind:
+  (a) for long-distance rides during peak hours, the app could
+  pre-assign a backup driver; (b) drivers could be offered
+  small incentives to take rides in high-cancellation areas;
+  (c) if the model detects a high cancellation risk early, the
+  app could adjust pricing to keep both drivers and passengers
+  committed to the trip.
