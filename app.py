@@ -239,7 +239,7 @@ with tab3:
 
     st.subheader("Top 10 Highest-Risk Routes")
     top_risk = (
-        route_data[route_data["count"] > 20]
+        route_data[route_data["count"] > 1]
         .assign(cancel_rate=lambda x: (x["cancel_rate"] * 100).round(1))
         .sort_values("cancel_rate", ascending=False)
         .head(10)
@@ -375,3 +375,4 @@ ORDER BY total_bookings DESC""",
             st.dataframe(result, use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"SQL Error: {e}")
+
