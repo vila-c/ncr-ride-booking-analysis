@@ -4,7 +4,7 @@ End-to-end data science project analysing **150,000 Delhi-NCR ride-booking recor
 to understand cancellation patterns and build a predictive model.
 
 ## 🌐 Live Demo
-👉 [View Interactive Dashboard]
+👉 [View Interactive Dashboard] [vila-chung-ncr-analysis.streamlit.app](https://vila-chung-ncr-analysis.streamlit.app/)
 
 ## 📂 Project Structure
 | Notebook | Description |
