@@ -273,9 +273,13 @@ with tab4:
 
     st.subheader("Feature Importance")
     fi = {
-        "Ride Distance": 0.21, "Hour": 0.18, "Avg VTAT": 0.15,
-        "Booking Value": 0.13, "Month": 0.10, "Vehicle Type": 0.09,
-        "Weekday": 0.07, "Avg CTAT": 0.07
+        "Ride Distance": 0.5806,
+        "Booking Value": 0.4066,
+        "Hour": 0.0041,
+        "Month": 0.0031,
+        "Weekday": 0.0024,
+        "Vehicle Type": 0.0023,
+        "Is_Weekend": 0.0008,
     }
     fi_df = pd.DataFrame(fi.items(), columns=["Feature", "Importance"])
     fig5 = px.bar(
@@ -377,5 +381,6 @@ ORDER BY total_bookings DESC""",
             st.dataframe(result, use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"SQL Error: {e}")
+
 
 
