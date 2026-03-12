@@ -290,11 +290,13 @@ with tab4:
 
     st.markdown("""
     ### Key Findings
-    - **Ride Distance** is the strongest predictor — longer rides have higher
-      cancellation risk, possibly due to driver reluctance
-    - **Hour of Day** reflects peak-hour supply-demand imbalance
-    - **Avg VTAT** (driver arrival time) suggests longer waits lead to more
-      customer-side cancellations
+    - **Ride Distance** is the strongest predictor (58%) — longer rides have
+      significantly higher cancellation risk, possibly due to driver reluctance
+    - **Booking Value** is the second strongest predictor (41%) — higher-fare
+      trips are more likely to be cancelled, possibly due to passenger price
+      sensitivity or driver cherry-picking
+    - **Time and date features** (Hour, Month, Weekday) contribute very little,
+      suggesting cancellation is driven more by trip characteristics than timing
 
     ### Social Data Science Lens
     Underserved urban corridors show systematically higher cancellation rates,
@@ -375,4 +377,5 @@ ORDER BY total_bookings DESC""",
             st.dataframe(result, use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"SQL Error: {e}")
+
 
