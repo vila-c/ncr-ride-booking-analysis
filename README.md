@@ -77,11 +77,15 @@ Streamlit Dashboard                  [app.py]
 
 ## 🔍 Key Findings
 
-- **Overall completion rate: ~62%** — the remaining 38% of bookings fail, primarily due to no driver found or driver cancellation (supply-side problem)
-- **Ride Distance is the strongest cancellation predictor (58% importance)** — longer rides carry significantly higher cancellation risk
-- **Booking Value is the second strongest predictor (41% importance)** — higher-fare trips are more likely to be cancelled, possibly due to driver cherry-picking or passenger price sensitivity
-- **Peak-hour cancellation rate is higher** — morning (7–9 AM) and evening (5–8 PM) rush hours show elevated cancellation rates due to supply-demand imbalance
-- **Mobility equity gap identified** — peripheral pickup zones show cancellation rates up to ~1.5× the dataset average, raising fairness concerns for underserved communities
+- **Overall completion rate: ~62%**
+- **Ride Distance is the dominant cancellation predictor (92.7% importance)**
+  — XGBoost identifies trip length as by far the strongest signal
+- **Booking Value contributes only 2.8%** — fare matters far less than
+  distance alone
+- **Time features (Hour, Weekday, Month) each contribute ~1%** — timing
+  has a small but consistent effect
+- **Mobility equity gap identified** — peripheral pickup zones show
+  cancellation rates up to ~1.5× the dataset average
 
 ---
 
@@ -89,11 +93,19 @@ Streamlit Dashboard                  [app.py]
 
 | Metric | Score |
 |--------|-------|
-| 5-fold CV ROC-AUC | 0.9725 ± 0.0007 |
-| Test ROC-AUC | 0.97+ |
-| Evaluation | Confusion Matrix · ROC Curve · Precision-Recall Curve |
+| Model | XGBoost |
+| 5-fold CV ROC-AUC | 0.9725 ± 0.0008 |
+| Test ROC-AUC | 0.9711 |
+| Avg Precision | 0.9646 |
+| Accuracy | 0.94 |
+| F1 (Completed) | 0.95 |
+| F1 (Cancelled) | 0.92 |
 
-> **Note on feature selection:** An earlier model using post-hoc features (driver ratings, customer ratings, CTAT) achieved AUC = 1.0 — this was identified as data leakage. The final model uses only features available at booking time, producing a realistic AUC of ~0.97.
+> **Note on feature selection:** An earlier model using post-hoc features 
+> (driver ratings, customer ratings, CTAT) achieved AUC = 1.0 — this was 
+> identified as data leakage. The final model uses only features available 
+> at booking time, trained with XGBoost, producing a realistic 
+> Test ROC-AUC of 0.9711 and Avg Precision of 0.9646.
 
 ---
 
