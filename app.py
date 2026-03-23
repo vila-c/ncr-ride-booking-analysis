@@ -273,13 +273,13 @@ with tab4:
 
     st.subheader("Feature Importance")
     fi = {
-        "Ride Distance": 0.5806,
-        "Booking Value": 0.4066,
-        "Hour": 0.0041,
-        "Month": 0.0031,
-        "Weekday": 0.0024,
-        "Vehicle Type": 0.0023,
-        "Is_Weekend": 0.0008,
+        "Ride Distance": 0.9265,
+        "Booking Value": 0.0277,
+        "Weekday": 0.0115,
+        "Hour": 0.0115,
+        "Month": 0.0114,
+        "Vehicle Type": 0.0114,
+        "Is_Weekend": 0.0000,
     }
     fi_df = pd.DataFrame(fi.items(), columns=["Feature", "Importance"])
     fig5 = px.bar(
@@ -294,13 +294,13 @@ with tab4:
 
     st.markdown("""
     ### Key Findings
-    - **Ride Distance** is the strongest predictor (58%) — longer rides have
-      significantly higher cancellation risk, possibly due to driver reluctance
-    - **Booking Value** is the second strongest predictor (41%) — higher-fare
-      trips are more likely to be cancelled, possibly due to passenger price
-      sensitivity or driver cherry-picking
-    - **Time and date features** (Hour, Month, Weekday) contribute very little,
-      suggesting cancellation is driven more by trip characteristics than timing
+    - **Ride Distance** is by far the strongest predictor (92.7%) — longer rides
+      carry significantly higher cancellation risk, likely due to driver reluctance
+      on long-haul trips
+    - **Booking Value** is the second predictor (2.8%) — its influence is much
+      smaller than distance, suggesting trip length matters more than fare alone
+    - **Time and date features** (Weekday, Hour, Month) each contribute ~1%,
+      collectively suggesting that timing plays a minor but consistent role
 
     ### Social Data Science Lens
     Underserved urban corridors show systematically higher cancellation rates,
