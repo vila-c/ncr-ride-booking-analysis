@@ -308,6 +308,117 @@ with tab4:
     alternative transport options.
     """)
 
+# ── Tab 4 Added：Interactive Cancellation Predictor ───────────
+    st.divider()
+    st.subheader("🔮 Try the Cancellation Predictor")
+    st.markdown(
+        "Enter a booking's details below to see the **predicted cancellation risk** "
+        "and what's driving it. This tool uses the same features as the trained "
+        "Random Forest model — only information available **at the time of booking**."
+    )
+
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        input_distance = st.slider("Ride Distance (km)", 1.0, 50.0, 10.0, step=0.5)
+        input_value    = st.slider("Booking Value (₹)",  50,  1000,  200, step=10)
+        input_hour     = st.slider("Hour of Day",         0,    23,    8)
+
+    with col_b:
+        input_month = st.selectbox(
+            "Month", list(range(1, 13)),
+            format_func=lambda x: [
+                "Jan","Feb","Mar","Apr","May","Jun",
+                "Jul","Aug","Sep","Oct","Nov","Dec"
+            ][x - 1]
+        )
+        input_weekday = st.selectbox(
+            "Day of Week",
+            [0, 1, 2, 3, 4, 5, 6],
+            format_func=lambda x: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][x]
+        )
+        input_vehicle = st.selectbox(
+            "Vehicle Type",
+            sorted(df["Vehicle Type"].unique())
+        )
+
+    input_weekend = 1 if input_weekday >= 5 else 0
+
+    if st.button("🔍 Predict Cancellation Risk"):
+
+        # Compute risk score using feature importance weights
+        # Note: This is a rule-based approximation for demonstration purposes.
+        # In production, use a serialised model: joblib.load("model.pkl")
+        distance_contrib = (input_distance / 50) * 0.5806
+        value_contrib    = (input_value / 1000)  * 0.4066
+        hour_contrib     = (
+            0.0041 if input_hour in list(range(7, 10)) + list(range(17, 21))
+            else 0.002
+        )
+        risk_score = min(0.95, distance_contrib + value_contrib + hour_contrib)
+
+        # Display risk score
+        if risk_score > 0.55:
+            label = "🔴 High Risk"
+        elif risk_score > 0.35:
+            label = "🟡 Medium Risk"
+        else:
+            label = "🟢 Low Risk"
+
+        st.metric("Predicted Cancellation Risk", f"{label} — {risk_score:.0%}")
+
+        st.caption(
+            "⚠️ This predictor uses a rule-based approximation weighted by feature "
+            "importance scores. For full model inference, a serialised Random Forest "
+            "(`joblib`) would be loaded in production."
+        )
+
+        # Feature contribution chart
+        contributions = {
+            "Ride Distance": round(distance_contrib, 4),
+            "Booking Value": round(value_contrib, 4),
+            "Hour of Day":   round(hour_contrib, 4),
+        }
+        contrib_df = pd.DataFrame(
+            contributions.items(),
+            columns=["Feature", "Contribution to Risk"]
+        )
+        fig_contrib = px.bar(
+            contrib_df.sort_values("Contribution to Risk"),
+            x="Contribution to Risk",
+            y="Feature",
+            orientation="h",
+            color="Contribution to Risk",
+            color_continuous_scale="Reds",
+            template="plotly_white",
+            title="What's Driving This Prediction?",
+            labels={"Contribution to Risk": "Risk Contribution Score"}
+        )
+        fig_contrib.update_layout(coloraxis_showscale=False)
+        st.plotly_chart(fig_contrib, use_container_width=True)
+
+        # Contextual interpretation
+        st.markdown("**Interpretation:**")
+        if input_distance > 30:
+            st.warning(
+                f"🚗 Long ride ({input_distance} km) — drivers may be reluctant "
+                f"to accept, increasing cancellation risk."
+            )
+        if input_value > 500:
+            st.warning(
+                f"💸 High fare (₹{input_value}) — passengers may reconsider "
+                f"after seeing the price."
+            )
+        if input_hour in list(range(7, 10)) + list(range(17, 21)):
+            st.warning(
+                f"⏰ Peak hour ({input_hour}:00) — supply-demand imbalance "
+                f"may increase cancellation likelihood."
+            )
+        if risk_score <= 0.35:
+            st.success(
+                "✅ This booking profile has a low cancellation risk — "
+                "short distance, reasonable fare, off-peak timing."
+            )
 
 # ── Tab 5: SQL Explorer ───────────────────────────────────────
 with tab5:
