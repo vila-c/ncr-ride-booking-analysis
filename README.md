@@ -16,13 +16,17 @@ This project follows the **CRISP-DM** (Cross-Industry Standard Process for Data 
 | Phase | Notebook / File | Description |
 |-------|----------------|-------------|
 | Business Understanding | — | Identify NCR ride cancellation drivers and equity gaps |
-| Data Understanding | `01_Cleaning` | Initial data exploration, structure and quality checks |
+| Data Understanding | `01_Cleaning` · `02_EDA` | Initial exploration, SQL analysis, Welch t-test, correlation heatmaps |
 | Data Preparation | `01_Cleaning` | Cleaning, feature engineering, missing value handling |
 | Modelling | `03_Data_Mining` | XGBoost classifier |
 | Evaluation | `03_Data_Mining` | ROC-AUC, Precision-Recall Curve, F1, Confusion Matrix |
 | Deployment | `app.py` | Streamlit interactive dashboard |
 
-> **Note on notebook ordering:** `02_EDA` performs deeper statistical analysis (SQL queries, Welch t-test, correlation heatmaps) after the data has been cleaned in `01_Cleaning`. This follows the iterative nature of CRISP-DM, where Data Understanding and Data Preparation inform each other.
+> **Note on methodology ordering:** In this project, we intentionally run `01_Cleaning` before `02_EDA`. While CRISP-DM typically places Data Understanding before Data Preparation, our workflow reflects the iterative nature of the framework.
+> - We first perform initial cleaning and basic checks in `01_Cleaning` to ensure data quality and consistency.
+> - Then, we conduct extended exploratory analysis (EDA) in `02_EDA`, applying statistical tests and correlation analysis on the cleaned dataset.
+>
+> This ordering avoids misleading insights from raw, noisy data and highlights the iterative feedback loop between Data Understanding and Data Preparation.
 
 ---
 
