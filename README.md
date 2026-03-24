@@ -16,11 +16,13 @@ This project follows the **CRISP-DM** (Cross-Industry Standard Process for Data 
 | Phase | Notebook / File | Description |
 |-------|----------------|-------------|
 | Business Understanding | — | Identify NCR ride cancellation drivers and equity gaps |
-| Data Understanding | `02_EDA` | EDA, SQL analysis, Welch t-test, correlation heatmaps |
+| Data Understanding | `01_Cleaning` | Initial data exploration, structure and quality checks |
 | Data Preparation | `01_Cleaning` | Cleaning, feature engineering, missing value handling |
-| Modelling | `03_Data_Mining` | Random Forest classifier, K-means risk clustering |
+| Modelling | `03_Data_Mining` | XGBoost classifier |
 | Evaluation | `03_Data_Mining` | ROC-AUC, Precision-Recall Curve, F1, Confusion Matrix |
 | Deployment | `app.py` | Streamlit interactive dashboard |
+
+> **Note on notebook ordering:** `02_EDA` performs deeper statistical analysis (SQL queries, Welch t-test, correlation heatmaps) after the data has been cleaned in `01_Cleaning`. This follows the iterative nature of CRISP-DM, where Data Understanding and Data Preparation inform each other.
 
 ---
 
@@ -42,17 +44,15 @@ Exploratory Data Analysis            [02_EDA]
 Feature Selection (event-time only)  [03_Data_Mining]
   · Only features available at booking time
   · Removed post-hoc features (ratings, CTAT, VTAT)
+  · Identified and resolved data leakage (AUC 1.0 → 0.97)
         ↓
 Train / Test Split
   · Stratified 75/25 split
   · Test-set imputation uses training medians only (leakage-free)
         ↓
-Random Forest Classifier
-  · class_weight = "balanced" (handles imbalanced classes)
+XGBoost Classifier
   · 5-fold cross-validation
-        ↓
-Evaluation
-  · ROC-AUC · Precision-Recall Curve · F1 · Confusion Matrix
+  · Evaluated on ROC-AUC, Precision-Recall, F1, Confusion Matrix
         ↓
 Streamlit Dashboard                  [app.py]
   · Interactive visualisations
@@ -69,7 +69,7 @@ Streamlit Dashboard                  [app.py]
 |------|-------------|
 | `01_Data_Cleaning_and_Preparation.ipynb` | Data wrangling, feature engineering, missing-value strategy |
 | `02_EDA_and_Statistics.ipynb` | EDA, SQL analysis, Welch t-test, correlation heatmaps |
-| `03_Data_Mining_and_Patterns.ipynb` | Random Forest classifier, K-means clustering, full model evaluation |
+| `03_Data_Mining_and_Patterns.ipynb` | XGBoost classifier, full model evaluation |
 | `04_Visualization_Dashboard_and_Insights.ipynb` | Route network graph, equity gap analysis, business insights |
 | `app.py` | Streamlit interactive dashboard |
 
@@ -77,15 +77,11 @@ Streamlit Dashboard                  [app.py]
 
 ## 🔍 Key Findings
 
-- **Overall completion rate: ~62%**
-- **Ride Distance is the dominant cancellation predictor (92.7% importance)**
-  — XGBoost identifies trip length as by far the strongest signal
-- **Booking Value contributes only 2.8%** — fare matters far less than
-  distance alone
-- **Time features (Hour, Weekday, Month) each contribute ~1%** — timing
-  has a small but consistent effect
-- **Mobility equity gap identified** — peripheral pickup zones show
-  cancellation rates up to ~1.5× the dataset average
+- **Overall completion rate: ~62%** — the remaining 38% of bookings fail, primarily due to no driver found or driver cancellation (supply-side problem)
+- **Ride Distance is the dominant cancellation predictor (92.7% importance)** — XGBoost identifies trip length as by far the strongest signal
+- **Booking Value contributes only 2.8%** — fare matters far less than distance alone
+- **Time features (Hour, Weekday, Month) each contribute ~1%** — timing has a small but consistent effect
+- **Mobility equity gap identified** — peripheral pickup zones show cancellation rates up to ~1.5× the dataset average
 
 ---
 
@@ -96,16 +92,12 @@ Streamlit Dashboard                  [app.py]
 | Model | XGBoost |
 | 5-fold CV ROC-AUC | 0.9725 ± 0.0008 |
 | Test ROC-AUC | 0.9711 |
-| Avg Precision | 0.9646 |
+| Avg Precision (PR Curve) | 0.9646 |
 | Accuracy | 0.94 |
-| F1 (Completed) | 0.95 |
-| F1 (Cancelled) | 0.92 |
+| F1 — Completed | 0.95 |
+| F1 — Cancelled | 0.92 |
 
-> **Note on feature selection:** An earlier model using post-hoc features 
-> (driver ratings, customer ratings, CTAT) achieved AUC = 1.0 — this was 
-> identified as data leakage. The final model uses only features available 
-> at booking time, trained with XGBoost, producing a realistic 
-> Test ROC-AUC of 0.9711 and Avg Precision of 0.9646.
+> **Note on feature selection:** An earlier model using post-hoc features (driver ratings, customer ratings, CTAT) achieved AUC = 1.0 — this was identified as data leakage. The final model uses only features available at booking time, trained with XGBoost, producing a realistic Test ROC-AUC of 0.9711 and Avg Precision of 0.9646.
 
 ---
 
@@ -124,15 +116,14 @@ This project is built for **educational and portfolio purposes**. Some tools use
 | Streamlit | Interactive dashboard | ✅ Rapid prototyping · ⚠️ Not designed for enterprise-scale traffic |
 | SQLite (in-memory) | SQL workflow demonstration | ✅ Education · ⚠️ Use PostgreSQL / BigQuery in production |
 | NetworkX | Route visualisation | ✅ Small graphs · ⚠️ Use a dedicated graph database (e.g. Neo4j) for large networks |
-| K-means clustering | Risk segmentation concept | ✅ Concept demonstration · ⚠️ Consider DBSCAN or business-rule-based segmentation in production |
-| scikit-learn Random Forest | Classification model | ✅ Education · ⚠️ Production pipelines typically use MLflow + model registry |
+| scikit-learn / XGBoost | Classification model | ✅ Education · ⚠️ Production pipelines typically use MLflow + model registry |
 | pandas (in-memory) | Data processing | ✅ Up to ~1M rows · ⚠️ Use Spark / Dask for large-scale data |
 
 ---
 
 ## 🛠️ Tech Stack
 
-Python · pandas · scikit-learn · Plotly · Seaborn · NetworkX · Streamlit · SQLite · scipy
+Python · pandas · scikit-learn · XGBoost · Plotly · Seaborn · NetworkX · Streamlit · SQLite · scipy
 
 ---
 
@@ -146,5 +137,5 @@ Python · pandas · scikit-learn · Plotly · Seaborn · NetworkX · Streamlit �
 
 ## 👤 Author
 
-Vila Chung · HKU BASc Social Data Science · 2025  
-[GitHub](https://github.com/your-username/ncr-ride-booking-analysis)
+Vila Chung · HKU BASc Social Data Science · 2025
+[GitHub](https://github.com/vila-c/ncr-ride-booking-analysis)
