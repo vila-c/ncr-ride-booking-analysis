@@ -77,8 +77,10 @@ completed = (filtered["Cancel_Type"] == "Completed").sum()
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Total Bookings",      f"{total:,}")
 col2.metric("Completion Rate",     f"{completed/total:.1%}")
-col3.metric("Cancellation Rate",   f"{1 - completed/total:.1%}")
-col4.metric("Avg Booking Value",   f"₹{filtered['Booking Value'].mean():.0f}")
+col3.metric("Non-completion Rate",   f"{1 - completed/total:.1%}",
+            help="Includes all non-completed bookings: Driver Cancelled, Customer Cancelled, No Driver Found, and Incomplete.")
+col4.metric("Avg Passenger Fare",   f"₹{filtered['Booking Value'].mean():.0f}",
+            help="Estimated fare charged to the passenger at booking time.")
 col5.metric("Avg Ride Distance",   f"{filtered['Ride Distance'].mean():.1f} km")
 st.divider()
 
@@ -99,11 +101,15 @@ with tab1:
         "**Important note on this dataset:** Through our analysis, we observed "
         "several patterns that suggest this Kaggle dataset is **synthetically "
         "generated or heavily simulated** rather than real Uber operational data. "
-        "Key indicators include: (1) cancellation rates are nearly identical "
+        "Key indicators include: (1) non-completion rates are nearly identical "
         "across all 7 vehicle types (37%–39%), which is unlikely in real operations; "
-        "(2) weekend and weekday cancellation rates differ by only 0.3%, showing "
-        "almost no temporal variation; (3) the 150,000 records are evenly "
-        "distributed across categories in a way that real-world data rarely is. "
+        "(2) weekend and weekday non-completion rates differ by only 0.1 pp, showing "
+        "almost no temporal variation; (3) **all 48,000 non-completed bookings "
+        "(Driver Cancelled, Customer Cancelled, No Driver Found) share identical "
+        "placeholder values** — Ride Distance = 23.72 km and Passenger Fare = ₹414 "
+        "with zero variance, meaning the data generator did not produce realistic "
+        "values for failed rides; (4) only Completed and Incomplete records have "
+        "varied, realistic distance and fare distributions. "
         "**All findings should be interpreted as educational exercises, not as "
         "reflections of actual ride-hailing behaviour.**"
     )
@@ -160,16 +166,16 @@ with tab1:
     )
     vehicle_stats.columns = [
         "Vehicle Type", "Total Bookings",
-        "Cancel Rate (%)", "Avg Booking Value (₹)", "Avg Distance (km)"
+        "Non-completion Rate (%)", "Avg Passenger Fare (₹)", "Avg Distance (km)"
     ]
     st.dataframe(vehicle_stats, use_container_width=True, hide_index=True)
 
     st.info(
-        "**What this table shows:** All seven vehicle types have cancellation rates "
+        "**What this table shows:** All seven vehicle types have non-completion rates "
         "clustered tightly between 37% and 39%. This **near-identical spread is itself "
         "a key finding** — it means vehicle type has virtually no impact on whether a "
-        "ride gets cancelled. Whether a passenger books an Auto (cheapest) or a Prime "
-        "SUV (most expensive), the odds of cancellation are statistically the same. "
+        "ride gets completed. Whether a passenger books an Auto (cheapest) or a Prime "
+        "SUV (most expensive), the odds of non-completion are statistically the same. "
         "This uniformity is unusual and further supports the hypothesis that the "
         "dataset is synthetically generated."
     )
@@ -177,7 +183,7 @@ with tab1:
 
 # ── Tab 2: Time Analysis ──────────────────────────────────────
 with tab2:
-    st.subheader("Hourly Booking Volume vs. Cancellation Rate")
+    st.subheader("Hourly Booking Volume vs. Non-completion Rate")
     hourly = (
         filtered.groupby("Hour")
         .agg(Volume=("Booking ID", "count"),
@@ -191,14 +197,14 @@ with tab2:
     ))
     fig3.add_trace(go.Scatter(
         x=hourly.index, y=hourly["Cancel_Rate"],
-        name="Cancel Rate (%)", yaxis="y2",
+        name="Non-completion Rate (%)", yaxis="y2",
         line=dict(color="tomato", width=2),
         mode="lines+markers"
     ))
     fig3.update_layout(
         xaxis_title="Hour of Day (0–23)",
         yaxis=dict(title="Booking Volume"),
-        yaxis2=dict(title="Cancel Rate (%)", overlaying="y", side="right"),
+        yaxis2=dict(title="Non-completion Rate (%)", overlaying="y", side="right"),
         legend=dict(x=0.01, y=0.99),
         template="plotly_white",
         hovermode="x unified"
@@ -208,14 +214,49 @@ with tab2:
     st.info(
         "**What this chart shows:** This is a dual-axis chart. The **blue bars** "
         "(left axis) show how many bookings were placed at each hour. The **red "
-        "line** (right axis) shows the cancellation rate at that hour.\n\n"
-        "**Key trend:** Booking volume is not evenly distributed — it peaks between "
-        "9–11 AM with a secondary peak around 6 PM, matching typical commuting "
-        "patterns. However, the red cancellation line is almost perfectly flat at "
-        "~38% across all 24 hours. This means that whether someone books at 3 AM "
-        "or 5 PM, the probability of cancellation is essentially the same. "
-        "**Time of day alone does not drive cancellations in this dataset.**"
+        "line** (right axis) shows the non-completion rate at that hour.\n\n"
+        "**Key finding:** Booking volume peaks between 9–11 AM with a secondary "
+        "peak around 6 PM, matching typical commuting patterns. However, the red "
+        "non-completion line is almost perfectly flat at ~38% across all 24 hours. "
+        "Whether someone books at 3 AM or 5 PM, the probability of non-completion "
+        "is essentially the same. "
+        "**Time of day alone does not drive non-completion in this dataset.**"
     )
+
+    with st.expander("📋 Hypothesis validation: does peak hour have higher non-completion?"):
+        st.markdown(
+            "**Hypothesis:** Morning rush (7–9 AM) and evening rush (17–20 PM) "
+            "should show higher non-completion rates because supply-demand "
+            "imbalance is more severe during commuting hours."
+        )
+        def _time_bin(h):
+            if h in (7, 8, 9): return "Morning Rush (7–9)"
+            elif h in (10, 11, 12, 13): return "Midday (10–13)"
+            elif h in (14, 15, 16): return "Afternoon (14–16)"
+            elif h in (17, 18, 19, 20): return "Evening Rush (17–20)"
+            elif h in (21, 22, 23): return "Night (21–23)"
+            else: return "Late Night (0–6)"
+        _tb = filtered.copy()
+        _tb["Time Bin"] = _tb["Hour"].apply(_time_bin)
+        _tb_stats = (
+            _tb.groupby("Time Bin")
+            .agg(Bookings=("Booking ID", "count"),
+                 Rate=("is_cancelled", "mean"))
+            .assign(Rate=lambda x: (x["Rate"] * 100).round(2))
+            .sort_values("Rate", ascending=False)
+            .reset_index()
+        )
+        _tb_stats.columns = ["Time Bin", "Bookings", "Non-completion Rate (%)"]
+        st.dataframe(_tb_stats, use_container_width=True, hide_index=True)
+        _range = _tb_stats["Non-completion Rate (%)"].max() - _tb_stats["Non-completion Rate (%)"].min()
+        st.markdown(
+            f"**Result:** The range across all time bins is just **{_range:.2f} "
+            f"percentage points**. Morning Rush and Evening Rush do not show "
+            f"meaningfully higher non-completion rates than off-peak hours. "
+            f"**The hypothesis is not supported by this dataset**, which further "
+            f"confirms that the data generator did not build in realistic temporal "
+            f"supply-demand dynamics."
+        )
 
     st.subheader("Weekday vs Weekend Comparison")
     c1, c2 = st.columns(2)
@@ -240,19 +281,19 @@ with tab2:
     with c2:
         fig_day2 = px.bar(
             day_stats, x="Day_Type", y="Cancel_Rate",
-            color="Day_Type", title="Cancel Rate: Weekday vs Weekend",
+            color="Day_Type", title="Non-completion Rate: Weekday vs Weekend",
             template="plotly_white",
             color_discrete_sequence=["steelblue", "coral"],
-            labels={"Cancel_Rate": "Cancel Rate (%)"}
+            labels={"Cancel_Rate": "Non-completion Rate (%)"}
         )
         st.plotly_chart(fig_day2, use_container_width=True)
 
     st.info(
         "**What these charts show:** The left chart compares total booking volume "
-        "between weekdays and weekends. The right chart compares their cancellation "
+        "between weekdays and weekends. The right chart compares their non-completion "
         "rates.\n\n"
-        "**Key trend:** Both the volume split (~71% weekday / ~29% weekend) and the "
-        "cancellation rates are nearly identical — weekday ~38.0% vs weekend ~38.1%, "
+        "**Key finding:** Both the volume split (~71% weekday / ~29% weekend) and the "
+        "non-completion rates are nearly identical — weekday ~38.0% vs weekend ~38.1%, "
         "a difference of just 0.1 percentage points. **This is not a meaningful "
         "difference.** In real ride-hailing data, you would expect weekend patterns "
         "to differ noticeably (different trip types, different driver availability). "
@@ -270,10 +311,10 @@ with tab3:
     )
     st.markdown(
         "Edge **thickness** = booking volume · "
-        "Edge **colour** = cancellation rate (green = low, red = high)"
+        "Edge **colour** = non-completion rate (green = low, red = high)"
     )
 
-    # ── Location Reference Table ──
+    # ── Location classifier (used by expander and descriptions) ──
     _all_locs = sorted(set(
         filtered["Pickup Location"].unique().tolist()
         + filtered["Drop Location"].unique().tolist()
@@ -282,7 +323,7 @@ with tab3:
     def _classify_ncr(name):
         n = name.lower()
         if "noida" in n or n == "botanical garden" or n == "greater noida":
-            return "Noida", "Suburban (East)"
+            return "Noida"
         if any(k in n for k in [
             "gurgaon", "dlf", "cyber hub", "golf course", "sushant lok",
             "udyog vihar", "iffco", "huda city", "sohna", "manesar",
@@ -291,44 +332,56 @@ with tab3:
             "pataudi", "gwal pahari", "subhash chowk", "ambience mall",
             "civil lines gurgaon", "old gurgaon", "sadar bazar gurgaon",
         ]):
-            return "Gurgaon (Gurugram)", "Suburban (South-West)"
+            return "Gurgaon"
         if "faridabad" in n:
-            return "Faridabad", "Suburban (South-East)"
+            return "Faridabad"
         if any(k in n for k in [
             "ghaziabad", "indirapuram", "vaishali", "kaushambi", "raj nagar",
         ]):
-            return "Ghaziabad", "Suburban (East)"
+            return "Ghaziabad"
         if any(k in n for k in [
             "meerut", "panipat", "sonipat", "bhiwadi", "bahadurgarh",
         ]):
-            return "Outer NCR", "Satellite City"
-        return "Delhi", "Urban Core"
+            return "Outer NCR"
+        return "Delhi"
 
-    _loc_ref = pd.DataFrame(
-        [{"Location": loc, "Region": _classify_ncr(loc)[0],
-          "Zone": _classify_ncr(loc)[1]} for loc in _all_locs]
-    ).sort_values(["Zone", "Region", "Location"])
+    _loc_map = {loc: _classify_ncr(loc) for loc in _all_locs}
 
-    with st.expander("📍 NCR Location Reference — what are 'Sectors' and where are these places?"):
+    # ── Top 10 Popular Routes reference table ──
+    _top_routes = (
+        filtered.groupby(["Pickup Location", "Drop Location"])
+        .agg(Bookings=("Booking ID", "count"),
+             NonComp=("is_cancelled", "mean"))
+        .assign(NonComp=lambda x: (x["NonComp"] * 100).round(1))
+        .reset_index()
+        .sort_values("Bookings", ascending=False)
+        .head(10)
+        .reset_index(drop=True)
+    )
+    _top_routes["Pickup Region"] = _top_routes["Pickup Location"].map(_loc_map)
+    _top_routes["Drop Region"] = _top_routes["Drop Location"].map(_loc_map)
+    _top_routes = _top_routes[[
+        "Pickup Location", "Pickup Region",
+        "Drop Location", "Drop Region",
+        "Bookings", "NonComp"
+    ]]
+    _top_routes.columns = [
+        "Pickup", "Pickup Region", "Drop", "Drop Region",
+        "Bookings", "Non-completion Rate (%)"
+    ]
+
+    with st.expander("📍 Top 10 most popular routes — with NCR region reference"):
         st.markdown(
-            "In Indian urban planning, **'Sector'** is a standard administrative "
-            "subdivision used in planned cities such as Noida, Gurgaon (Gurugram), "
-            "Faridabad, and Dwarka. For example, *Noida Sector 18* and *Noida "
-            "Sector 62* are both neighbourhoods within Noida but can be 10–15 km "
-            "apart. A location name containing 'Sector' simply identifies its "
-            "neighbourhood within a larger city.\n\n"
-            "The table below classifies all locations in the current filtered data "
-            "into broad geographic regions, helping you interpret the route network "
-            "and risk table that follow."
+            "The table below shows the **10 busiest routes** by booking volume, "
+            "along with each location's NCR region. In Indian urban planning, "
+            "**'Sector'** is a standard neighbourhood subdivision used in planned "
+            "cities such as Noida, Gurgaon, and Faridabad (e.g. *Noida Sector 18* "
+            "and *Noida Sector 62* are both in Noida but 10–15 km apart).\n\n"
+            "**Note:** Distance and fare columns are excluded because all "
+            "non-completed bookings share identical placeholder values (23.72 km / "
+            "₹414), which would skew the per-route averages."
         )
-        _region_counts = (
-            _loc_ref.groupby(["Zone", "Region"])
-            .size().reset_index(name="No. of Locations")
-        )
-        st.caption("Region summary")
-        st.dataframe(_region_counts, use_container_width=True, hide_index=True)
-        st.caption("Full location list (scroll to browse)")
-        st.dataframe(_loc_ref, use_container_width=True, hide_index=True, height=250)
+        st.dataframe(_top_routes, use_container_width=True, hide_index=True)
 
     n_routes = st.slider(
         "Number of top routes to display", 20, 100, 50,
@@ -371,7 +424,7 @@ with tab3:
         norm=plt.Normalize(vmin=min(edge_colors), vmax=max(edge_colors))
     )
     sm.set_array([])
-    fig4.colorbar(sm, ax=ax, label="Cancellation Rate (%)")
+    fig4.colorbar(sm, ax=ax, label="Non-completion Rate (%)")
     ax.axis("off")
     st.pyplot(fig4)
 
@@ -386,17 +439,17 @@ with tab3:
         "**How to read it:**\n"
         "- **Line thickness** = how many bookings occurred on that route (thicker = "
         "more popular)\n"
-        "- **Line colour** = cancellation rate on that route (**green** = low "
-        "cancellation, good service; **yellow** = moderate; **red** = high "
-        "cancellation, underserved)\n"
+        "- **Line colour** = non-completion rate on that route (**green** = low "
+        "non-completion, good service; **yellow** = moderate; **red** = high "
+        "non-completion, underserved)\n"
         "- **Circle size** = how many routes connect to that location (larger = "
         "more connected hub)\n\n"
         f"**Key trend:** The most connected hubs in the current view are "
         f"**{_hub_names}**. Routes radiating outward to less-connected peripheral "
-        f"nodes tend to show warmer (redder) colours, indicating higher cancellation "
+        f"nodes tend to show warmer (redder) colours, indicating higher non-completion "
         f"rates on corridors leading away from the city centre. "
-        f"Expand the **Location Reference** table above to see which region each "
-        f"node belongs to (e.g. Delhi urban core vs. suburban Gurgaon / Noida)."
+        f"Expand the **Top 10 most popular routes** table above to see which "
+        f"NCR region each location belongs to (e.g. Delhi vs. Gurgaon / Noida)."
     )
 
     st.subheader("Top 10 Highest-Risk Routes")
@@ -407,21 +460,22 @@ with tab3:
         .head(10)
         .reset_index(drop=True)
     )
-    top_risk.columns = ["Pickup", "Drop", "Total Bookings", "Cancel Rate (%)"]
+    top_risk.columns = ["Pickup", "Drop", "Total Bookings", "Non-completion Rate (%)"]
     st.dataframe(top_risk, use_container_width=True, hide_index=True)
 
     if len(top_risk) > 0:
         _worst_pickup = top_risk.iloc[0]["Pickup"]
         _worst_drop   = top_risk.iloc[0]["Drop"]
-        _worst_rate   = top_risk.iloc[0]["Cancel Rate (%)"]
+        _worst_rate   = top_risk.iloc[0]["Non-completion Rate (%)"]
         st.info(
-            f"**What this table shows:** The 10 routes with the highest cancellation "
+            f"**What this table shows:** The 10 routes with the highest non-completion "
             f"rates (among routes with more than 1 booking). The worst-performing route "
-            f"is **{_worst_pickup} \u2192 {_worst_drop}** at **{_worst_rate}%** cancellation. "
+            f"is **{_worst_pickup} \u2192 {_worst_drop}** at **{_worst_rate}%** non-completion. "
             f"Compare this to the dataset average of ~38%. Routes where either the "
-            f"pickup or drop location is in a suburban or satellite region (see the "
-            f"**Location Reference** table above) tend to cluster near the top of "
-            f"this list, suggesting a **mobility equity gap** \u2014 passengers "
+            f"pickup or drop location is in a suburban region (see the "
+            f"**Top 10 routes** table above for region classifications) tend to "
+            f"cluster near the top of this list, suggesting a **mobility equity "
+            f"gap** \u2014 passengers "
             f"in outer zones face systematically worse service because drivers are less "
             f"willing to accept longer trips with lower return-trip demand."
         )
@@ -429,7 +483,7 @@ with tab3:
 
 # ── Tab 4: Model Insights ─────────────────────────────────────
 with tab4:
-    st.subheader("Cancellation Prediction Model — XGBoost")
+    st.subheader("Non-completion Prediction Model — XGBoost")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Model",         "XGBoost")
@@ -439,8 +493,10 @@ with tab4:
     st.markdown("""
     ### Methodology
     An **XGBoost classifier** (n_estimators=200, max_depth=8, learning_rate=0.1)
-    was trained on this dataset to predict whether a booking would be cancelled.
-    Key design decisions:
+    was trained on this dataset to predict whether a booking would be completed.
+    The target variable `is_cancelled` is a binary flag where 1 = non-completed
+    (includes Driver Cancelled, Customer Cancelled, No Driver Found, and
+    Incomplete). Key design decisions:
 
     - **Leakage-free preprocessing**: test-set imputation used training-set
       medians only, preventing data leakage
@@ -452,7 +508,7 @@ with tab4:
     st.subheader("Feature Importance")
     fi = {
         "Ride Distance": 0.9265,
-        "Booking Value": 0.0277,
+        "Booking Value (Passenger Fare)": 0.0277,
         "Hour": 0.0115,
         "Month": 0.0114,
         "Weekday": 0.0115,
@@ -473,22 +529,30 @@ with tab4:
     st.info(
         "**Reading this chart:** Each bar shows how much a feature contributes to "
         "the model's prediction. **Ride Distance** dominates at 92.7%, meaning the "
-        "model relies almost entirely on trip length to predict cancellations. "
-        "Longer rides are far more likely to be cancelled. All other features "
-        "(fare, time, vehicle type) contribute very little by comparison."
+        "model relies almost entirely on trip length to predict non-completion. "
+        "Longer rides are far more likely to fail. All other features "
+        "(passenger fare, time, vehicle type) contribute very little by comparison."
     )
 
     st.markdown("""
     ### Key Findings
     - **Ride Distance** is the dominant predictor (92.7%) — longer rides have
-      significantly higher cancellation risk, possibly due to driver reluctance
-    - **Booking Value** contributes only 2.8% — fare matters far less than
+      significantly higher non-completion risk, possibly due to driver reluctance
+    - **Booking Value (Passenger Fare)** contributes only 2.8% — fare matters far less than
       distance alone
     - **Time and date features** (Hour, Month, Weekday) each contribute ~1%,
-      suggesting cancellation is driven almost entirely by trip distance
+      suggesting non-completion is driven almost entirely by trip distance
+
+    ### Why we merged all non-completion types
+    All cancelled bookings (Driver Cancelled, Customer Cancelled, No Driver Found)
+    share **identical placeholder values** for Ride Distance (23.72 km) and Booking
+    Value (₹414), making it impossible to distinguish them by these features.
+    Only Completed and Incomplete records have varied, realistic values. This is why
+    the model uses a single binary target (`is_cancelled`) rather than predicting
+    individual cancellation types.
 
     ### Social Data Science Lens
-    Underserved urban corridors show systematically higher cancellation rates,
+    Underserved urban corridors show systematically higher non-completion rates,
     raising **mobility equity** concerns for lower-income zones with limited
     alternative transport options.
     """)
@@ -529,38 +593,38 @@ with tab5:
 
     # Preset queries
     PRESETS = {
-        "Cancellation rate by vehicle type": """
+        "Non-completion rate by vehicle type": """
 SELECT   vehicle_type,
          COUNT(*)                           AS total_bookings,
-         ROUND(AVG(is_cancelled)*100, 1)   AS cancel_rate_pct
+         ROUND(AVG(is_cancelled)*100, 1)   AS non_completion_rate_pct
 FROM     rides
 GROUP BY vehicle_type
-ORDER BY cancel_rate_pct DESC""",
+ORDER BY non_completion_rate_pct DESC""",
 
         "Top 10 highest-risk pickup locations": """
 SELECT   pickup_location,
          COUNT(*)                           AS total_bookings,
-         ROUND(AVG(is_cancelled)*100, 1)   AS cancel_rate_pct
+         ROUND(AVG(is_cancelled)*100, 1)   AS non_completion_rate_pct
 FROM     rides
 GROUP BY pickup_location
 HAVING   COUNT(*) > 100
-ORDER BY cancel_rate_pct DESC
+ORDER BY non_completion_rate_pct DESC
 LIMIT    10""",
 
         "Weekend vs Weekday comparison": """
 SELECT   CASE WHEN is_weekend=1 THEN 'Weekend' ELSE 'Weekday' END AS day_type,
          COUNT(*)                           AS total_bookings,
-         ROUND(AVG(booking_value), 1)       AS avg_booking_value,
+         ROUND(AVG(booking_value), 1)       AS avg_passenger_fare,
          ROUND(AVG(ride_distance), 1)       AS avg_distance_km,
-         ROUND(AVG(is_cancelled)*100, 1)   AS cancel_rate_pct
+         ROUND(AVG(is_cancelled)*100, 1)   AS non_completion_rate_pct
 FROM     rides
 GROUP BY is_weekend""",
 
         "Payment method breakdown": """
 SELECT   payment_method,
          COUNT(*)                           AS total_bookings,
-         ROUND(AVG(is_cancelled)*100, 1)   AS cancel_rate_pct,
-         ROUND(AVG(booking_value), 1)       AS avg_booking_value
+         ROUND(AVG(is_cancelled)*100, 1)   AS non_completion_rate_pct,
+         ROUND(AVG(booking_value), 1)       AS avg_passenger_fare
 FROM     rides
 WHERE    payment_method IS NOT NULL
 GROUP BY payment_method

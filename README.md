@@ -81,11 +81,12 @@ Streamlit Dashboard                  [app.py]
 
 ## 🔍 Key Findings
 
-- **Overall completion rate: ~62%** — the remaining 38% of bookings fail, primarily due to no driver found or driver cancellation (supply-side problem)
-- **Ride Distance is the dominant cancellation predictor (92.7% importance)** — XGBoost identifies trip length as by far the strongest signal
-- **Booking Value contributes only 2.8%** — fare matters far less than distance alone
-- **Time features (Hour, Weekday, Month) each contribute ~1%** — timing has a small but consistent effect
-- **Mobility equity gap identified** — peripheral pickup zones show cancellation rates up to ~1.2× the dataset average
+- **Overall completion rate: ~62%** — the remaining 38% of bookings are non-completed, primarily due to no driver found or driver cancellation (supply-side problem)
+- **Ride Distance is the dominant non-completion predictor (92.7% importance)** — XGBoost identifies trip length as by far the strongest signal
+- **Booking Value (Passenger Fare) contributes only 2.8%** — fare matters far less than distance alone
+- **Time features (Hour, Weekday, Month) each contribute ~1%** — peak-hour hypothesis tested and not supported; timing has negligible effect
+- **Mobility equity gap identified** — peripheral pickup zones show non-completion rates up to ~1.2× the dataset average
+- **Synthetic data indicators** — all 48,000 non-completed bookings share identical placeholder values for distance (23.72 km) and fare (₹414), confirming the dataset is synthetically generated
 
 ---
 
@@ -101,13 +102,13 @@ Streamlit Dashboard                  [app.py]
 | F1 — Completed | 0.95 |
 | F1 — Cancelled | 0.92 |
 
-> **Note on feature selection:** An earlier model using post-hoc features (driver ratings, customer ratings, CTAT) achieved AUC = 1.0 — this was identified as data leakage. The final model uses only features available at booking time, trained with XGBoost, producing a realistic Test ROC-AUC of 0.9711 and Avg Precision of 0.9646.
+> **Note on feature selection:** An earlier model using post-hoc features (driver ratings, customer ratings, CTAT) achieved AUC = 1.0 — this was identified as data leakage. The final model uses only features available at booking time, trained with XGBoost, producing a realistic Test ROC-AUC of 0.9711 and Avg Precision of 0.9646. All non-completion types are merged into a single binary target (`is_cancelled`) because the three cancellation categories share identical placeholder values for distance and fare, making per-type prediction infeasible.
 
 ---
 
 ## 🗺️ Mobility Equity Insight
 
-A NetworkX route graph (Top 30 routes) visualises cancellation rates across corridors. A supplementary bar chart quantifies the **equity gap** — the difference in cancellation rates between the best and worst-served pickup zones — highlighting areas where platform optimisation for profitability may unintentionally disadvantage certain communities.
+A NetworkX route graph (Top 30 routes) visualises non-completion rates across corridors. A supplementary bar chart quantifies the **equity gap** — the difference in non-completion rates between the best and worst-served pickup zones — highlighting areas where platform optimisation for profitability may unintentionally disadvantage certain communities.
 
 ---
 
