@@ -272,6 +272,64 @@ with tab3:
         "Edge **thickness** = booking volume · "
         "Edge **colour** = cancellation rate (green = low, red = high)"
     )
+
+    # ── Location Reference Table ──
+    _all_locs = sorted(set(
+        filtered["Pickup Location"].unique().tolist()
+        + filtered["Drop Location"].unique().tolist()
+    ))
+
+    def _classify_ncr(name):
+        n = name.lower()
+        if "noida" in n or n == "botanical garden" or n == "greater noida":
+            return "Noida", "Suburban (East)"
+        if any(k in n for k in [
+            "gurgaon", "dlf", "cyber hub", "golf course", "sushant lok",
+            "udyog vihar", "iffco", "huda city", "sohna", "manesar",
+            "palam vihar", "sikanderpur", "mg road", "ardee", "vatika",
+            "badshahpur", "hero honda", "kherki daula", "basai", "khandsa",
+            "pataudi", "gwal pahari", "subhash chowk", "ambience mall",
+            "civil lines gurgaon", "old gurgaon", "sadar bazar gurgaon",
+        ]):
+            return "Gurgaon (Gurugram)", "Suburban (South-West)"
+        if "faridabad" in n:
+            return "Faridabad", "Suburban (South-East)"
+        if any(k in n for k in [
+            "ghaziabad", "indirapuram", "vaishali", "kaushambi", "raj nagar",
+        ]):
+            return "Ghaziabad", "Suburban (East)"
+        if any(k in n for k in [
+            "meerut", "panipat", "sonipat", "bhiwadi", "bahadurgarh",
+        ]):
+            return "Outer NCR", "Satellite City"
+        return "Delhi", "Urban Core"
+
+    _loc_ref = pd.DataFrame(
+        [{"Location": loc, "Region": _classify_ncr(loc)[0],
+          "Zone": _classify_ncr(loc)[1]} for loc in _all_locs]
+    ).sort_values(["Zone", "Region", "Location"])
+
+    with st.expander("📍 NCR Location Reference — what are 'Sectors' and where are these places?"):
+        st.markdown(
+            "In Indian urban planning, **'Sector'** is a standard administrative "
+            "subdivision used in planned cities such as Noida, Gurgaon (Gurugram), "
+            "Faridabad, and Dwarka. For example, *Noida Sector 18* and *Noida "
+            "Sector 62* are both neighbourhoods within Noida but can be 10–15 km "
+            "apart. A location name containing 'Sector' simply identifies its "
+            "neighbourhood within a larger city.\n\n"
+            "The table below classifies all locations in the current filtered data "
+            "into broad geographic regions, helping you interpret the route network "
+            "and risk table that follow."
+        )
+        _region_counts = (
+            _loc_ref.groupby(["Zone", "Region"])
+            .size().reset_index(name="No. of Locations")
+        )
+        st.caption("Region summary")
+        st.dataframe(_region_counts, use_container_width=True, hide_index=True)
+        st.caption("Full location list (scroll to browse)")
+        st.dataframe(_loc_ref, use_container_width=True, hide_index=True, height=250)
+
     n_routes = st.slider(
         "Number of top routes to display", 20, 100, 50,
         help="Drag to show more or fewer routes. Start with 30-50 for a clear picture."
@@ -336,7 +394,9 @@ with tab3:
         f"**Key trend:** The most connected hubs in the current view are "
         f"**{_hub_names}**. Routes radiating outward to less-connected peripheral "
         f"nodes tend to show warmer (redder) colours, indicating higher cancellation "
-        f"rates on corridors leading away from the city centre."
+        f"rates on corridors leading away from the city centre. "
+        f"Expand the **Location Reference** table above to see which region each "
+        f"node belongs to (e.g. Delhi urban core vs. suburban Gurgaon / Noida)."
     )
 
     st.subheader("Top 10 Highest-Risk Routes")
@@ -359,8 +419,9 @@ with tab3:
             f"rates (among routes with more than 1 booking). The worst-performing route "
             f"is **{_worst_pickup} \u2192 {_worst_drop}** at **{_worst_rate}%** cancellation. "
             f"Compare this to the dataset average of ~38%. Routes where either the "
-            f"pickup or drop location is far from the city centre tend to cluster near "
-            f"the top of this list, suggesting a **mobility equity gap** \u2014 passengers "
+            f"pickup or drop location is in a suburban or satellite region (see the "
+            f"**Location Reference** table above) tend to cluster near the top of "
+            f"this list, suggesting a **mobility equity gap** \u2014 passengers "
             f"in outer zones face systematically worse service because drivers are less "
             f"willing to accept longer trips with lower return-trip demand."
         )
