@@ -37,14 +37,27 @@ st.divider()
 
 # ── Sidebar filters ───────────────────────────────────────────
 st.sidebar.header("🔍 Filters")
-st.sidebar.markdown("Use the filters below to explore different segments of the data.")
+st.sidebar.markdown(
+    "**How to use these filters:**\n\n"
+    "**Step 1.** Select one or more **Vehicle Types** below to focus on "
+    "specific ride categories (e.g. Auto, Go Sedan). Removing a type hides "
+    "its bookings from all charts.\n\n"
+    "**Step 2.** Drag the **Hour of Day** slider to narrow the time window "
+    "(e.g. set 7–9 to see morning rush only).\n\n"
+    "All five tabs update automatically as you change filters."
+)
+st.sidebar.markdown("---")
 
 vehicle_filter = st.sidebar.multiselect(
-    "Vehicle Type",
+    "① Vehicle Type",
     options=sorted(df["Vehicle Type"].unique()),
-    default=sorted(df["Vehicle Type"].unique())
+    default=sorted(df["Vehicle Type"].unique()),
+    help="Select which vehicle types to include. All are selected by default."
 )
-hour_range = st.sidebar.slider("Hour of Day", 0, 23, (0, 23))
+hour_range = st.sidebar.slider(
+    "② Hour of Day", 0, 23, (0, 23),
+    help="Filter bookings by hour. Drag endpoints to narrow the range."
+)
 
 filtered = df[
     (df["Vehicle Type"].isin(vehicle_filter)) &
@@ -106,6 +119,13 @@ with tab1:
         fig2.update_traces(textposition="inside", textinfo="percent+label")
         st.plotly_chart(fig2, use_container_width=True)
 
+    st.info(
+        "**Reading these charts:** The bar chart (left) shows the raw count of each "
+        "booking outcome. The pie chart (right) shows the same data as percentages. "
+        "The largest slice is **Completed** (~62%), meaning about 4 in 10 bookings "
+        "fail — mostly because no driver was found or the driver cancelled."
+    )
+
     st.subheader("Vehicle Type Performance")
     vehicle_stats = (
         filtered.groupby("Vehicle Type")
@@ -125,6 +145,12 @@ with tab1:
         "Cancel Rate (%)", "Avg Booking Value (₹)", "Avg Distance (km)"
     ]
     st.dataframe(vehicle_stats, use_container_width=True, hide_index=True)
+
+    st.caption(
+        "**Takeaway:** Cancellation rates are nearly identical across all vehicle "
+        "types (37%–39%), which means the type of car you book does not meaningfully "
+        "affect whether the ride gets cancelled."
+    )
 
 
 # ── Tab 2: Time Analysis ──────────────────────────────────────
@@ -157,6 +183,14 @@ with tab2:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
+    st.info(
+        "**Reading this chart:** The blue bars show how many bookings occur at each "
+        "hour (left axis). The red line shows the cancellation rate at each hour "
+        "(right axis). Booking volume peaks around 9–11 AM, but the cancellation "
+        "rate stays remarkably flat (~38%) throughout the day, meaning time of day "
+        "alone has almost no effect on whether your ride gets cancelled."
+    )
+
     st.subheader("Weekday vs Weekend Comparison")
     c1, c2 = st.columns(2)
     with c1:
@@ -187,15 +221,28 @@ with tab2:
         )
         st.plotly_chart(fig_day2, use_container_width=True)
 
+    st.caption(
+        "**Takeaway:** Weekday and weekend booking volumes and cancellation rates "
+        "are almost identical, confirming that the day of the week has no significant "
+        "impact on cancellations."
+    )
+
 
 # ── Tab 3: Route Network ──────────────────────────────────────
 with tab3:
     st.subheader("Popular Route Network Graph")
     st.markdown(
+        "This graph shows the most popular routes in the NCR ride network. "
+        "Use the slider below to control how many routes are shown."
+    )
+    st.markdown(
         "Edge **thickness** = booking volume · "
         "Edge **colour** = cancellation rate (green = low, red = high)"
     )
-    n_routes = st.slider("Number of top routes to display", 20, 100, 50)
+    n_routes = st.slider(
+        "Number of top routes to display", 20, 100, 50,
+        help="Drag to show more or fewer routes. Start with 30-50 for a clear picture."
+    )
 
     route_data = (
         filtered.groupby(["Pickup Location", "Drop Location"])
@@ -237,6 +284,14 @@ with tab3:
     ax.axis("off")
     st.pyplot(fig4)
 
+    st.info(
+        "**Reading this graph:** Each circle is a pickup or drop location. Lines "
+        "between them represent routes. Thicker lines = more bookings on that route. "
+        "**Green lines** = low cancellation rates (good service). **Red lines** = "
+        "high cancellation rates (underserved routes). Larger circles indicate "
+        "locations that appear in many routes."
+    )
+
     st.subheader("Top 10 Highest-Risk Routes")
     top_risk = (
         route_data[route_data["count"] > 1]
@@ -247,6 +302,12 @@ with tab3:
     )
     top_risk.columns = ["Pickup", "Drop", "Total Bookings", "Cancel Rate (%)"]
     st.dataframe(top_risk, use_container_width=True, hide_index=True)
+
+    st.caption(
+        "**Takeaway:** Routes connecting peripheral areas (Noida Sector, Gurgaon "
+        "Sector) to the city centre tend to have the highest cancellation rates, "
+        "suggesting drivers are less willing to serve these longer, less profitable corridors."
+    )
 
 
 # ── Tab 4: Model Insights ─────────────────────────────────────
@@ -292,6 +353,14 @@ with tab4:
     )
     st.plotly_chart(fig5, use_container_width=True)
 
+    st.info(
+        "**Reading this chart:** Each bar shows how much a feature contributes to "
+        "the model's prediction. **Ride Distance** dominates at 92.7%, meaning the "
+        "model relies almost entirely on trip length to predict cancellations. "
+        "Longer rides are far more likely to be cancelled. All other features "
+        "(fare, time, vehicle type) contribute very little by comparison."
+    )
+
     st.markdown("""
     ### Key Findings
     - **Ride Distance** is the dominant predictor (92.7%) — longer rides have
@@ -314,6 +383,17 @@ with tab5:
     st.markdown(
         "Run SQL queries directly on the dataset using an in-memory SQLite database. "
         "This demonstrates the ability to work with both DataFrame and SQL-based workflows."
+    )
+
+    st.markdown(
+        "**How to use this tool:**\n\n"
+        "**Step 1.** Pick a **preset query** from the dropdown below — each one "
+        "answers a specific business question.\n\n"
+        "**Step 2.** Review the SQL code in the text area. You can **edit it** to "
+        "customise the analysis (e.g. change `LIMIT 10` to `LIMIT 20`).\n\n"
+        "**Step 3.** Click the **Run Query** button to execute and see results.\n\n"
+        "💡 *Tip: The table name is `rides`. Column names use snake_case "
+        "(e.g. `vehicle_type`, `ride_distance`, `is_cancelled`).*"
     )
 
     # Load data into SQLite
@@ -370,10 +450,14 @@ GROUP BY payment_method
 ORDER BY total_bookings DESC""",
     }
 
-    preset = st.selectbox("Choose a preset query:", list(PRESETS.keys()))
-    query  = st.text_area("SQL Query (editable):", value=PRESETS[preset], height=160)
+    preset = st.selectbox(
+        "① Choose a preset query:",
+        list(PRESETS.keys()),
+        help="Each preset answers a different business question about the dataset."
+    )
+    query  = st.text_area("② SQL Query (editable):", value=PRESETS[preset], height=160)
 
-    if st.button("▶ Run Query"):
+    if st.button("③ ▶ Run Query"):
         try:
             result = pd.read_sql(query, conn)
             st.success(f"Query returned {len(result)} rows.")
