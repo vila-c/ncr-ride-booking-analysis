@@ -317,6 +317,10 @@ with tab3:
     ax.axis("off")
     st.pyplot(fig4)
 
+    # Find the top hub nodes dynamically
+    _top_hubs = sorted(G.nodes(), key=lambda n: G.degree(n), reverse=True)[:3]
+    _hub_names = ", ".join(_top_hubs)
+
     st.info(
         "**What this graph shows:** This is a **directed network graph** where each "
         "circle (node) represents a pickup or drop-off location in the NCR region. "
@@ -329,10 +333,10 @@ with tab3:
         "cancellation, underserved)\n"
         "- **Circle size** = how many routes connect to that location (larger = "
         "more connected hub)\n\n"
-        "**Key trend:** Central locations like Dwarka and Connaught Place appear as "
-        "large hubs with many connections. Routes connecting to peripheral zones "
-        "(outer Noida, Gurgaon outskirts) tend to show redder edges, indicating "
-        "these corridors are systematically underserved by drivers."
+        f"**Key trend:** The most connected hubs in the current view are "
+        f"**{_hub_names}**. Routes radiating outward to less-connected peripheral "
+        f"nodes tend to show warmer (redder) colours, indicating higher cancellation "
+        f"rates on corridors leading away from the city centre."
     )
 
     st.subheader("Top 10 Highest-Risk Routes")
@@ -346,15 +350,20 @@ with tab3:
     top_risk.columns = ["Pickup", "Drop", "Total Bookings", "Cancel Rate (%)"]
     st.dataframe(top_risk, use_container_width=True, hide_index=True)
 
-    st.info(
-        "**What this table shows:** The 10 routes with the highest cancellation rates "
-        "(filtered to routes with more than 1 booking). Routes involving peripheral "
-        "areas such as Noida Sector and Gurgaon Sector consistently appear at the top, "
-        "with cancellation rates well above the 38% dataset average. This pattern "
-        "suggests a **mobility equity gap** — passengers in outer zones face "
-        "systematically worse service because drivers are less willing to accept "
-        "longer trips to areas with lower return-trip demand."
-    )
+    if len(top_risk) > 0:
+        _worst_pickup = top_risk.iloc[0]["Pickup"]
+        _worst_drop   = top_risk.iloc[0]["Drop"]
+        _worst_rate   = top_risk.iloc[0]["Cancel Rate (%)"]
+        st.info(
+            f"**What this table shows:** The 10 routes with the highest cancellation "
+            f"rates (among routes with more than 1 booking). The worst-performing route "
+            f"is **{_worst_pickup} \u2192 {_worst_drop}** at **{_worst_rate}%** cancellation. "
+            f"Compare this to the dataset average of ~38%. Routes where either the "
+            f"pickup or drop location is far from the city centre tend to cluster near "
+            f"the top of this list, suggesting a **mobility equity gap** \u2014 passengers "
+            f"in outer zones face systematically worse service because drivers are less "
+            f"willing to accept longer trips with lower return-trip demand."
+        )
 
 
 # ── Tab 4: Model Insights ─────────────────────────────────────
