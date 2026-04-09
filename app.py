@@ -94,6 +94,20 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # ── Tab 1: Overview ───────────────────────────────────────────
 with tab1:
     st.subheader("Booking Status & Vehicle Distribution")
+
+    st.warning(
+        "**Important note on this dataset:** Through our analysis, we observed "
+        "several patterns that suggest this Kaggle dataset is **synthetically "
+        "generated or heavily simulated** rather than real Uber operational data. "
+        "Key indicators include: (1) cancellation rates are nearly identical "
+        "across all 7 vehicle types (37%–39%), which is unlikely in real operations; "
+        "(2) weekend and weekday cancellation rates differ by only 0.3%, showing "
+        "almost no temporal variation; (3) the 150,000 records are evenly "
+        "distributed across categories in a way that real-world data rarely is. "
+        "**All findings should be interpreted as educational exercises, not as "
+        "reflections of actual ride-hailing behaviour.**"
+    )
+
     c1, c2 = st.columns(2)
 
     with c1:
@@ -120,10 +134,14 @@ with tab1:
         st.plotly_chart(fig2, use_container_width=True)
 
     st.info(
-        "**Reading these charts:** The bar chart (left) shows the raw count of each "
-        "booking outcome. The pie chart (right) shows the same data as percentages. "
-        "The largest slice is **Completed** (~62%), meaning about 4 in 10 bookings "
-        "fail — mostly because no driver was found or the driver cancelled."
+        "**What these charts show:** The bar chart (left) counts how many bookings "
+        "ended in each outcome. **Completed** is the tallest bar at ~93,000 bookings. "
+        "The remaining ~57,000 bookings failed, split across three categories. "
+        "The pie chart (right) shows the same data as percentages: only **62%** of "
+        "rides actually completed. The two biggest failure modes are **No Driver Found** "
+        "(~20%) and **Driver Cancelled** (~11%), both supply-side problems where the "
+        "platform could not match the passenger with a willing driver. **Customer "
+        "Cancelled** accounts for only ~4%."
     )
 
     st.subheader("Vehicle Type Performance")
@@ -146,10 +164,14 @@ with tab1:
     ]
     st.dataframe(vehicle_stats, use_container_width=True, hide_index=True)
 
-    st.caption(
-        "**Takeaway:** Cancellation rates are nearly identical across all vehicle "
-        "types (37%–39%), which means the type of car you book does not meaningfully "
-        "affect whether the ride gets cancelled."
+    st.info(
+        "**What this table shows:** All seven vehicle types have cancellation rates "
+        "clustered tightly between 37% and 39%. This **near-identical spread is itself "
+        "a key finding** — it means vehicle type has virtually no impact on whether a "
+        "ride gets cancelled. Whether a passenger books an Auto (cheapest) or a Prime "
+        "SUV (most expensive), the odds of cancellation are statistically the same. "
+        "This uniformity is unusual and further supports the hypothesis that the "
+        "dataset is synthetically generated."
     )
 
 
@@ -184,11 +206,15 @@ with tab2:
     st.plotly_chart(fig3, use_container_width=True)
 
     st.info(
-        "**Reading this chart:** The blue bars show how many bookings occur at each "
-        "hour (left axis). The red line shows the cancellation rate at each hour "
-        "(right axis). Booking volume peaks around 9–11 AM, but the cancellation "
-        "rate stays remarkably flat (~38%) throughout the day, meaning time of day "
-        "alone has almost no effect on whether your ride gets cancelled."
+        "**What this chart shows:** This is a dual-axis chart. The **blue bars** "
+        "(left axis) show how many bookings were placed at each hour. The **red "
+        "line** (right axis) shows the cancellation rate at that hour.\n\n"
+        "**Key trend:** Booking volume is not evenly distributed — it peaks between "
+        "9–11 AM with a secondary peak around 6 PM, matching typical commuting "
+        "patterns. However, the red cancellation line is almost perfectly flat at "
+        "~38% across all 24 hours. This means that whether someone books at 3 AM "
+        "or 5 PM, the probability of cancellation is essentially the same. "
+        "**Time of day alone does not drive cancellations in this dataset.**"
     )
 
     st.subheader("Weekday vs Weekend Comparison")
@@ -221,10 +247,17 @@ with tab2:
         )
         st.plotly_chart(fig_day2, use_container_width=True)
 
-    st.caption(
-        "**Takeaway:** Weekday and weekend booking volumes and cancellation rates "
-        "are almost identical, confirming that the day of the week has no significant "
-        "impact on cancellations."
+    st.info(
+        "**What these charts show:** The left chart compares total booking volume "
+        "between weekdays and weekends. The right chart compares their cancellation "
+        "rates.\n\n"
+        "**Key trend:** Both the volume split (~71% weekday / ~29% weekend) and the "
+        "cancellation rates are nearly identical — weekday ~38.0% vs weekend ~38.1%, "
+        "a difference of just 0.1 percentage points. **This is not a meaningful "
+        "difference.** In real ride-hailing data, you would expect weekend patterns "
+        "to differ noticeably (different trip types, different driver availability). "
+        "The near-perfect uniformity here reinforces the observation that this "
+        "dataset lacks natural temporal variation."
     )
 
 
@@ -285,11 +318,21 @@ with tab3:
     st.pyplot(fig4)
 
     st.info(
-        "**Reading this graph:** Each circle is a pickup or drop location. Lines "
-        "between them represent routes. Thicker lines = more bookings on that route. "
-        "**Green lines** = low cancellation rates (good service). **Red lines** = "
-        "high cancellation rates (underserved routes). Larger circles indicate "
-        "locations that appear in many routes."
+        "**What this graph shows:** This is a **directed network graph** where each "
+        "circle (node) represents a pickup or drop-off location in the NCR region. "
+        "Arrows between nodes represent routes that passengers actually booked.\n\n"
+        "**How to read it:**\n"
+        "- **Line thickness** = how many bookings occurred on that route (thicker = "
+        "more popular)\n"
+        "- **Line colour** = cancellation rate on that route (**green** = low "
+        "cancellation, good service; **yellow** = moderate; **red** = high "
+        "cancellation, underserved)\n"
+        "- **Circle size** = how many routes connect to that location (larger = "
+        "more connected hub)\n\n"
+        "**Key trend:** Central locations like Dwarka and Connaught Place appear as "
+        "large hubs with many connections. Routes connecting to peripheral zones "
+        "(outer Noida, Gurgaon outskirts) tend to show redder edges, indicating "
+        "these corridors are systematically underserved by drivers."
     )
 
     st.subheader("Top 10 Highest-Risk Routes")
@@ -303,10 +346,14 @@ with tab3:
     top_risk.columns = ["Pickup", "Drop", "Total Bookings", "Cancel Rate (%)"]
     st.dataframe(top_risk, use_container_width=True, hide_index=True)
 
-    st.caption(
-        "**Takeaway:** Routes connecting peripheral areas (Noida Sector, Gurgaon "
-        "Sector) to the city centre tend to have the highest cancellation rates, "
-        "suggesting drivers are less willing to serve these longer, less profitable corridors."
+    st.info(
+        "**What this table shows:** The 10 routes with the highest cancellation rates "
+        "(filtered to routes with more than 1 booking). Routes involving peripheral "
+        "areas such as Noida Sector and Gurgaon Sector consistently appear at the top, "
+        "with cancellation rates well above the 38% dataset average. This pattern "
+        "suggests a **mobility equity gap** — passengers in outer zones face "
+        "systematically worse service because drivers are less willing to accept "
+        "longer trips to areas with lower return-trip demand."
     )
 
 
