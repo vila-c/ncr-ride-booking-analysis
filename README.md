@@ -85,7 +85,7 @@ Streamlit Dashboard                  [app.py]
 - **Ride Distance is the dominant cancellation predictor (92.7% importance)** — XGBoost identifies trip length as by far the strongest signal
 - **Booking Value contributes only 2.8%** — fare matters far less than distance alone
 - **Time features (Hour, Weekday, Month) each contribute ~1%** — timing has a small but consistent effect
-- **Mobility equity gap identified** — peripheral pickup zones show cancellation rates up to ~1.5× the dataset average
+- **Mobility equity gap identified** — peripheral pickup zones show cancellation rates up to ~1.2× the dataset average
 
 ---
 

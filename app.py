@@ -27,7 +27,7 @@ df = load_data()
 st.title("🚕 NCR Ride Booking Analytics Dashboard")
 st.markdown(
     "**Author: Vila Chung** · HKU BASc Social Data Science · 2025 · "
-    "[GitHub](https://github.com/vila-c/ncr-ride-booking-analysis)"
+    "[GitHub](https://github.com/[your-username]/ncr-ride-booking-analysis)"
 )
 st.caption(
     "Dataset: Uber Ride Analytics Dashboard · Kaggle (Yash Devladdha) · "
@@ -177,18 +177,9 @@ with tab2:
             color_discrete_sequence=["steelblue", "coral"]
         )
         st.plotly_chart(fig_day, use_container_width=True)
-
     with c2:
-        # ✅ 修复：直接从 filtered 独立计算，避免 day_stats 顺序错乱
-        cancel_day_df = pd.DataFrame({
-            "Day_Type": ["Weekday", "Weekend"],
-            "Cancel_Rate": [
-                round(filtered[filtered["Is_Weekend"] == 0]["is_cancelled"].mean() * 100, 1),
-                round(filtered[filtered["Is_Weekend"] == 1]["is_cancelled"].mean() * 100, 1),
-            ]
-        })
         fig_day2 = px.bar(
-            cancel_day_df, x="Day_Type", y="Cancel_Rate",
+            day_stats, x="Day_Type", y="Cancel_Rate",
             color="Day_Type", title="Cancel Rate: Weekday vs Weekend",
             template="plotly_white",
             color_discrete_sequence=["steelblue", "coral"],
@@ -260,23 +251,19 @@ with tab3:
 
 # ── Tab 4: Model Insights ─────────────────────────────────────
 with tab4:
-    # ✅ 修复：标题改为 XGBoost
     st.subheader("Cancellation Prediction Model — XGBoost")
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Model",        "XGBoost")
-    col2.metric("CV Folds",     "5-fold")
-    col3.metric("Test ROC-AUC", "0.9711")
+    col1.metric("Model",         "XGBoost")
+    col2.metric("CV Folds",      "5-fold")
+    col3.metric("Evaluation",    "ROC-AUC")
 
-    # ✅ 修复：Methodology 文字改为 XGBoost，移除 class_weight
     st.markdown("""
     ### Methodology
-    An **XGBoost classifier** was trained on this dataset to predict
-    whether a booking would be cancelled. Key design decisions:
+    An **XGBoost classifier** (n_estimators=200, max_depth=8, learning_rate=0.1)
+    was trained on this dataset to predict whether a booking would be cancelled.
+    Key design decisions:
 
-    - **Event-time features only**: removed post-hoc features (driver ratings,
-      customer ratings, CTAT) to prevent data leakage — reducing AUC from
-      a misleading 1.0 to a realistic 0.9711
     - **Leakage-free preprocessing**: test-set imputation used training-set
       medians only, preventing data leakage
     - **Stratified split**: 75/25 train/test split with `stratify=y` to
@@ -285,156 +272,40 @@ with tab4:
     """)
 
     st.subheader("Feature Importance")
-    # ✅ 修复：使用 XGBoost 真实特征重要性数字
     fi = {
         "Ride Distance": 0.9265,
         "Booking Value": 0.0277,
-        "Weekday":       0.0115,
-        "Hour":          0.0115,
-        "Month":         0.0114,
-        "Vehicle Type":  0.0114,
-        "Is_Weekend":    0.0000,
+        "Hour": 0.0115,
+        "Month": 0.0114,
+        "Weekday": 0.0115,
+        "Vehicle Type": 0.0114,
+        "Is_Weekend": 0.0000,
     }
     fi_df = pd.DataFrame(fi.items(), columns=["Feature", "Importance"])
     fig5 = px.bar(
         fi_df.sort_values("Importance"),
         x="Importance", y="Feature", orientation="h",
-        title="Top Feature Importance Scores (XGBoost)",
+        title="Top Feature Importance Scores",
         color="Importance", color_continuous_scale="Blues",
         template="plotly_white",
         labels={"Importance": "Importance Score"}
     )
     st.plotly_chart(fig5, use_container_width=True)
 
-    # ✅ 修复：Key Findings 更新为 XGBoost 结果
     st.markdown("""
     ### Key Findings
-    - **Ride Distance** is by far the strongest predictor (92.7%) — longer rides
-      carry significantly higher cancellation risk, likely due to driver reluctance
-      on long-haul trips
-    - **Booking Value** is the second predictor (2.8%) — its influence is much
-      smaller than distance, suggesting trip length matters more than fare alone
-    - **Time and date features** (Weekday, Hour, Month) each contribute ~1%,
-      collectively suggesting that timing plays a minor but consistent role
+    - **Ride Distance** is the dominant predictor (92.7%) — longer rides have
+      significantly higher cancellation risk, possibly due to driver reluctance
+    - **Booking Value** contributes only 2.8% — fare matters far less than
+      distance alone
+    - **Time and date features** (Hour, Month, Weekday) each contribute ~1%,
+      suggesting cancellation is driven almost entirely by trip distance
 
     ### Social Data Science Lens
     Underserved urban corridors show systematically higher cancellation rates,
     raising **mobility equity** concerns for lower-income zones with limited
     alternative transport options.
     """)
-
-    # ── Interactive Cancellation Predictor ───────────────────
-    st.divider()
-    st.subheader("🔮 Try the Cancellation Predictor")
-    st.markdown(
-        "Enter a booking's details below to see the **predicted cancellation risk** "
-        "and what's driving it. This tool uses the same features as the trained "
-        "XGBoost model — only information available **at the time of booking**."
-    )
-
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        input_distance = st.slider("Ride Distance (km)", 1.0, 50.0, 10.0, step=0.5)
-        input_value    = st.slider("Booking Value (₹)",  50,  1000,  200, step=10)
-        input_hour     = st.slider("Hour of Day",         0,    23,    8)
-
-    with col_b:
-        input_month = st.selectbox(
-            "Month", list(range(1, 13)),
-            format_func=lambda x: [
-                "Jan","Feb","Mar","Apr","May","Jun",
-                "Jul","Aug","Sep","Oct","Nov","Dec"
-            ][x - 1]
-        )
-        input_weekday = st.selectbox(
-            "Day of Week",
-            [0, 1, 2, 3, 4, 5, 6],
-            format_func=lambda x: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][x]
-        )
-        input_vehicle = st.selectbox(
-            "Vehicle Type",
-            sorted(df["Vehicle Type"].unique())
-        )
-
-    input_weekend = 1 if input_weekday >= 5 else 0
-
-    if st.button("🔍 Predict Cancellation Risk"):
-
-        # ✅ 修复：使用 XGBoost 真实特征重要性权重
-        # Note: rule-based approximation for demonstration purposes.
-        # In production, use a serialised model: joblib.load("model.pkl")
-        distance_contrib = (input_distance / 50) * 0.9265
-        value_contrib    = (input_value / 1000)  * 0.0277
-        hour_contrib     = (
-            0.0115 if input_hour in list(range(7, 10)) + list(range(17, 21))
-            else 0.005
-        )
-        risk_score = min(0.95, distance_contrib + value_contrib + hour_contrib)
-
-        # Display risk score
-        if risk_score > 0.55:
-            label = "🔴 High Risk"
-        elif risk_score > 0.35:
-            label = "🟡 Medium Risk"
-        else:
-            label = "🟢 Low Risk"
-
-        st.metric("Predicted Cancellation Risk", f"{label} — {risk_score:.0%}")
-
-        # ✅ 修复：caption 改为 XGBoost
-        st.caption(
-            "⚠️ This predictor uses a rule-based approximation weighted by XGBoost "
-            "feature importance scores. For full model inference, a serialised XGBoost "
-            "model (`joblib`) would be loaded in production."
-        )
-
-        # Feature contribution chart
-        contributions = {
-            "Ride Distance": round(distance_contrib, 4),
-            "Booking Value": round(value_contrib, 4),
-            "Hour of Day":   round(hour_contrib, 4),
-        }
-        contrib_df = pd.DataFrame(
-            contributions.items(),
-            columns=["Feature", "Contribution to Risk"]
-        )
-        fig_contrib = px.bar(
-            contrib_df.sort_values("Contribution to Risk"),
-            x="Contribution to Risk",
-            y="Feature",
-            orientation="h",
-            color="Contribution to Risk",
-            color_continuous_scale="Reds",
-            template="plotly_white",
-            title="What's Driving This Prediction?",
-            labels={"Contribution to Risk": "Risk Contribution Score"}
-        )
-        fig_contrib.update_layout(coloraxis_showscale=False)
-        st.plotly_chart(fig_contrib, use_container_width=True)
-
-        # Contextual interpretation
-        st.markdown("**Interpretation:**")
-        if input_distance > 30:
-            st.warning(
-                f"🚗 Long ride ({input_distance} km) — drivers may be reluctant "
-                f"to accept, increasing cancellation risk."
-            )
-        if input_value > 500:
-            st.warning(
-                f"💸 High fare (₹{input_value}) — passengers may reconsider "
-                f"after seeing the price."
-            )
-        if input_hour in list(range(7, 10)) + list(range(17, 21)):
-            st.warning(
-                f"⏰ Peak hour ({input_hour}:00) — supply-demand imbalance "
-                f"may increase cancellation likelihood."
-            )
-        if risk_score <= 0.35:
-            st.success(
-                "✅ This booking profile has a low cancellation risk — "
-                "short distance, reasonable fare, off-peak timing."
-            )
 
 
 # ── Tab 5: SQL Explorer ───────────────────────────────────────
@@ -445,6 +316,7 @@ with tab5:
         "This demonstrates the ability to work with both DataFrame and SQL-based workflows."
     )
 
+    # Load data into SQLite
     @st.cache_resource
     def get_connection():
         conn = sqlite3.connect(":memory:", check_same_thread=False)
@@ -458,6 +330,7 @@ with tab5:
 
     conn = get_connection()
 
+    # Preset queries
     PRESETS = {
         "Cancellation rate by vehicle type": """
 SELECT   vehicle_type,
@@ -507,3 +380,7 @@ ORDER BY total_bookings DESC""",
             st.dataframe(result, use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"SQL Error: {e}")
+
+
+
+
