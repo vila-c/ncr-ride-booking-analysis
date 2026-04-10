@@ -80,8 +80,11 @@ col2.metric("Completion Rate",     f"{completed/total:.1%}")
 col3.metric("Non-completion Rate",   f"{1 - completed/total:.1%}",
             help="Includes all non-completed bookings: Driver Cancelled, Customer Cancelled, No Driver Found, and Incomplete.")
 col4.metric("Avg Passenger Fare",   f"₹{filtered['Booking Value'].mean():.0f}",
-            help="Estimated fare charged to the passenger at booking time.")
-col5.metric("Avg Ride Distance",   f"{filtered['Ride Distance'].mean():.1f} km")
+            help="Average fare for trips that actually started (Completed + Incomplete). "
+                 "Cancelled/No Driver Found bookings have no fare data.")
+col5.metric("Avg Ride Distance",   f"{filtered['Ride Distance'].mean():.1f} km",
+            help="Average distance for trips that actually started. "
+                 "NaN values (cancelled bookings) are excluded.")
 st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────
@@ -98,20 +101,20 @@ with tab1:
     st.subheader("Booking Status & Vehicle Distribution")
 
     st.warning(
-        "**Important note on this dataset:** Through our analysis, we observed "
-        "several patterns that suggest this Kaggle dataset is **synthetically "
-        "generated or heavily simulated** rather than real Uber operational data. "
-        "Key indicators include: (1) non-completion rates are nearly identical "
-        "across all 7 vehicle types (37%–39%), which is unlikely in real operations; "
-        "(2) weekend and weekday non-completion rates differ by only 0.1 pp, showing "
-        "almost no temporal variation; (3) **all 48,000 non-completed bookings "
-        "(Driver Cancelled, Customer Cancelled, No Driver Found) share identical "
-        "placeholder values** — Ride Distance = 23.72 km and Passenger Fare = ₹414 "
-        "with zero variance, meaning the data generator did not produce realistic "
-        "values for failed rides; (4) only Completed and Incomplete records have "
-        "varied, realistic distance and fare distributions. "
-        "**All findings should be interpreted as educational exercises, not as "
-        "reflections of actual ride-hailing behaviour.**"
+        "**Important note on data cleaning:** During our analysis, we discovered "
+        "that the original cleaning pipeline (Notebook 01) applied **unconditional "
+        "median imputation** to all rows — including 48,000 cancelled/no-driver "
+        "bookings where Ride Distance, Fare, and Ratings were legitimately missing "
+        "(the trip never started, so no real values exist). This produced identical "
+        "placeholder values (Distance = 23.72 km, Fare = ₹414) for all non-started "
+        "trips, which the original XGBoost model learned to detect (AUC 0.97). "
+        "**We fixed this** by restricting imputation to only Completed and Incomplete "
+        "orders (trips that actually started). The corrected model now predicts "
+        "**trip intervention needs** (mid-trip failures + poor ratings) with an "
+        "honest AUC of ~0.56, confirming that the available features have limited "
+        "predictive power for trip outcomes. "
+        "**Lesson learned: an anomalously high AUC (> 0.95) should always be "
+        "investigated as a potential data leakage signal.**"
     )
 
     c1, c2 = st.columns(2)
@@ -142,12 +145,12 @@ with tab1:
     st.info(
         "**What these charts show:** The bar chart (left) counts how many bookings "
         "ended in each outcome. **Completed** is the tallest bar at ~93,000 bookings. "
-        "The remaining ~57,000 bookings failed, split across three categories. "
+        "The remaining ~57,000 bookings failed, split across four categories. "
         "The pie chart (right) shows the same data as percentages: only **62%** of "
-        "rides actually completed. The two biggest failure modes are **No Driver Found** "
-        "(~20%) and **Driver Cancelled** (~11%), both supply-side problems where the "
-        "platform could not match the passenger with a willing driver. **Customer "
-        "Cancelled** accounts for only ~4%."
+        "rides actually completed. The biggest failure mode is **Driver Cancelled** "
+        "(18%), followed by **No Driver Found** (7%) and **Customer Cancelled** (7%) "
+        "— both supply-side problems where the platform could not match the passenger "
+        "with a willing driver. **Incomplete** rides account for 6%."
     )
 
     st.subheader("Vehicle Type Performance")
@@ -176,8 +179,9 @@ with tab1:
         "a key finding** — it means vehicle type has virtually no impact on whether a "
         "ride gets completed. Whether a passenger books an Auto (cheapest) or a Prime "
         "SUV (most expensive), the odds of non-completion are statistically the same. "
-        "This uniformity is unusual and further supports the hypothesis that the "
-        "dataset is synthetically generated."
+        "Note: Avg Passenger Fare and Avg Distance are calculated only from trips that "
+        "actually started (Completed + Incomplete); cancelled bookings have no real "
+        "distance or fare data."
     )
 
 
@@ -215,10 +219,11 @@ with tab2:
         "**What this chart shows:** This is a dual-axis chart. The **blue bars** "
         "(left axis) show how many bookings were placed at each hour. The **red "
         "line** (right axis) shows the non-completion rate at that hour.\n\n"
-        "**Key finding:** Booking volume peaks between 9–11 AM with a secondary "
-        "peak around 6 PM, matching typical commuting patterns. However, the red "
+        "**Key finding:** Booking volume peaks during the evening rush (17–19 PM, "
+        "with hour 18 the single highest at ~12,400 bookings), and a secondary "
+        "peak around 10 AM, matching typical commuting patterns. However, the red "
         "non-completion line is almost perfectly flat at ~38% across all 24 hours. "
-        "Whether someone books at 3 AM or 5 PM, the probability of non-completion "
+        "Whether someone books at 3 AM or 6 PM, the probability of non-completion "
         "is essentially the same. "
         "**Time of day alone does not drive non-completion in this dataset.**"
     )
@@ -253,9 +258,8 @@ with tab2:
             f"**Result:** The range across all time bins is just **{_range:.2f} "
             f"percentage points**. Morning Rush and Evening Rush do not show "
             f"meaningfully higher non-completion rates than off-peak hours. "
-            f"**The hypothesis is not supported by this dataset**, which further "
-            f"confirms that the data generator did not build in realistic temporal "
-            f"supply-demand dynamics."
+            f"**The hypothesis is not supported by this dataset** — time of day "
+            f"has negligible impact on booking outcomes."
         )
 
     st.subheader("Weekday vs Weekend Comparison")
@@ -293,12 +297,10 @@ with tab2:
         "between weekdays and weekends. The right chart compares their non-completion "
         "rates.\n\n"
         "**Key finding:** Both the volume split (~71% weekday / ~29% weekend) and the "
-        "non-completion rates are nearly identical — weekday ~38.0% vs weekend ~38.1%, "
-        "a difference of just 0.1 percentage points. **This is not a meaningful "
+        "non-completion rates are nearly identical — weekday 38.1% vs weekend 37.7%, "
+        "a difference of just 0.4 percentage points. **This is not a meaningful "
         "difference.** In real ride-hailing data, you would expect weekend patterns "
-        "to differ noticeably (different trip types, different driver availability). "
-        "The near-perfect uniformity here reinforces the observation that this "
-        "dataset lacks natural temporal variation."
+        "to differ noticeably (different trip types, different driver availability)."
     )
 
 
@@ -377,9 +379,9 @@ with tab3:
             "**'Sector'** is a standard neighbourhood subdivision used in planned "
             "cities such as Noida, Gurgaon, and Faridabad (e.g. *Noida Sector 18* "
             "and *Noida Sector 62* are both in Noida but 10–15 km apart).\n\n"
-            "**Note:** Distance and fare columns are excluded because all "
-            "non-completed bookings share identical placeholder values (23.72 km / "
-            "₹414), which would skew the per-route averages."
+            "**Note:** Distance and fare columns are excluded because cancelled "
+            "bookings have no real trip data (the ride never started), which would "
+            "skew the per-route averages."
         )
         st.dataframe(_top_routes, use_container_width=True, hide_index=True)
 
@@ -483,43 +485,49 @@ with tab3:
 
 # ── Tab 4: Model Insights ─────────────────────────────────────
 with tab4:
-    st.subheader("Non-completion Prediction Model — XGBoost")
+    st.subheader("Trip Intervention Prediction Model — XGBoost")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Model",         "XGBoost")
     col2.metric("CV Folds",      "5-fold")
-    col3.metric("Evaluation",    "ROC-AUC")
+    col3.metric("Test AUC",      "0.56")
 
     st.markdown("""
-    ### Methodology
-    An **XGBoost classifier** (n_estimators=200, max_depth=8, learning_rate=0.1)
-    was trained on this dataset to predict whether a booking would be completed.
-    The target variable `is_cancelled` is a binary flag where 1 = non-completed
-    (includes Driver Cancelled, Customer Cancelled, No Driver Found, and
-    Incomplete). Key design decisions:
+    ### What changed: cleaning error → model correction
 
-    - **Leakage-free preprocessing**: test-set imputation used training-set
-      medians only, preventing data leakage
-    - **Stratified split**: 75/25 train/test split with `stratify=y` to
-      preserve class balance
-    - **Validation**: 5-fold cross-validation for robust performance estimation
+    Our original model achieved an **AUC of 0.97** — but this was a **false signal**.
+    The cleaning pipeline (Notebook 01) had applied unconditional median imputation
+    to *all* rows, filling 48,000 cancelled bookings (which never started) with
+    identical values: Distance = 23.72 km, Fare = ₹414. The model was simply
+    detecting "which rows were imputed" — not learning real cancellation patterns.
+
+    **After fixing the cleaning script** (restricting imputation to trips that
+    actually started), we redesigned the model:
+
+    - **Target:** `needs_intervention` = 1 when the trip was Incomplete (broke down
+      mid-journey) OR Completed with either Driver or Customer Rating < 4.0
+    - **Data:** 102,000 rows (Completed + Incomplete only — trips with real data)
+    - **Features:** Only information available at trip start: Distance, Fare, Hour,
+      Weekday, Month, Vehicle Type
+    - **Ratings** are used to *define* the target (what counts as a bad outcome),
+      NOT as input features — so there is no data leakage
     """)
 
     st.subheader("Feature Importance")
     fi = {
-        "Ride Distance": 0.9265,
-        "Booking Value (Passenger Fare)": 0.0277,
-        "Hour": 0.0115,
-        "Month": 0.0114,
-        "Weekday": 0.0115,
-        "Vehicle Type": 0.0114,
+        "Ride Distance": 0.2505,
+        "Booking Value (Passenger Fare)": 0.1606,
+        "Hour": 0.1505,
+        "Month": 0.1493,
+        "Weekday": 0.1463,
+        "Vehicle Type": 0.1427,
         "Is_Weekend": 0.0000,
     }
     fi_df = pd.DataFrame(fi.items(), columns=["Feature", "Importance"])
     fig5 = px.bar(
         fi_df.sort_values("Importance"),
         x="Importance", y="Feature", orientation="h",
-        title="Top Feature Importance Scores",
+        title="Feature Importance Scores (corrected model)",
         color="Importance", color_continuous_scale="Blues",
         template="plotly_white",
         labels={"Importance": "Importance Score"}
@@ -527,29 +535,31 @@ with tab4:
     st.plotly_chart(fig5, use_container_width=True)
 
     st.info(
-        "**Reading this chart:** Each bar shows how much a feature contributes to "
-        "the model's prediction. **Ride Distance** dominates at 92.7%, meaning the "
-        "model relies almost entirely on trip length to predict non-completion. "
-        "Longer rides are far more likely to fail. All other features "
-        "(passenger fare, time, vehicle type) contribute very little by comparison."
+        "**Reading this chart:** Unlike the original model where Ride Distance "
+        "dominated at 92.7%, the corrected model shows **roughly even importance** "
+        "across all features (~14–25% each). No single feature stands out as a "
+        "strong predictor of poor trip outcomes. This means that whether a trip "
+        "results in a breakdown or low rating is driven by factors **not captured "
+        "in this dataset** — such as driver behaviour, vehicle condition, traffic, "
+        "or weather."
     )
 
     st.markdown("""
     ### Key Findings
-    - **Ride Distance** is the dominant predictor (92.7%) — longer rides have
-      significantly higher non-completion risk, possibly due to driver reluctance
-    - **Booking Value (Passenger Fare)** contributes only 2.8% — fare matters far less than
-      distance alone
-    - **Time and date features** (Hour, Month, Weekday) each contribute ~1%,
-      suggesting non-completion is driven almost entirely by trip distance
 
-    ### Why we merged all non-completion types
-    All cancelled bookings (Driver Cancelled, Customer Cancelled, No Driver Found)
-    share **identical placeholder values** for Ride Distance (23.72 km) and Booking
-    Value (₹414), making it impossible to distinguish them by these features.
-    Only Completed and Incomplete records have varied, realistic values. This is why
-    the model uses a single binary target (`is_cancelled`) rather than predicting
-    individual cancellation types.
+    - **AUC = 0.56** — the model performs only slightly better than random,
+      confirming that trip-start features alone cannot reliably predict poor outcomes
+    - **Feature importance is evenly distributed** — no single feature dominates,
+      unlike the artifact-inflated original where Distance was 92.7%
+    - **An anomalously high AUC (> 0.95) should always be investigated** — our
+      original 0.97 turned out to be a data cleaning artifact, not real predictive power
+
+    ### Lesson Learned
+    This project demonstrates a critical real-world data science workflow:
+    discovering a data pipeline error, diagnosing its downstream impact,
+    correcting it, and **honestly reporting** the revised (lower) model
+    performance. The corrected AUC of 0.56 is the truth — and recognising
+    that truth is more valuable than reporting an inflated 0.97.
 
     ### Social Data Science Lens
     Underserved urban corridors show systematically higher non-completion rates,

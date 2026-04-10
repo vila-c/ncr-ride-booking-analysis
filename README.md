@@ -46,15 +46,16 @@ Exploratory Data Analysis            [02_EDA]
   · Correlation heatmaps
         ↓
 Feature Selection (event-time only)  [03_Data_Mining]
-  · Only features available at booking time
-  · Removed post-hoc features (ratings, CTAT, VTAT)
-  · Identified and resolved data leakage (AUC 1.0 → 0.97)
+  · Only features available at trip start
+  · Removed post-hoc features (ratings used to define target, not as features)
+  · Fixed cleaning-induced data leakage (AUC 0.97 → 0.56)
         ↓
 Train / Test Split
   · Stratified 75/25 split
   · Test-set imputation uses training medians only (leakage-free)
         ↓
 XGBoost Classifier
+  · Target: needs_intervention (Incomplete + low-rated Completed)
   · 5-fold cross-validation
   · Evaluated on ROC-AUC, Precision-Recall, F1, Confusion Matrix
         ↓
@@ -82,27 +83,26 @@ Streamlit Dashboard                  [app.py]
 ## 🔍 Key Findings
 
 - **Overall completion rate: ~62%** — the remaining 38% of bookings are non-completed, primarily due to no driver found or driver cancellation (supply-side problem)
-- **Ride Distance is the dominant non-completion predictor (92.7% importance)** — XGBoost identifies trip length as by far the strongest signal
-- **Booking Value (Passenger Fare) contributes only 2.8%** — fare matters far less than distance alone
-- **Time features (Hour, Weekday, Month) each contribute ~1%** — peak-hour hypothesis tested and not supported; timing has negligible effect
+- **Data cleaning error discovered and fixed** — the original cleaning pipeline applied unconditional median imputation, filling 48,000 cancelled bookings with identical placeholder values (Distance = 23.72 km, Fare = ₹414). This has been corrected to preserve NaN for trips that never started
+- **Original AUC 0.97 was a data artifact** — the model was detecting imputed values, not real cancellation patterns. After correction, AUC dropped to 0.56, confirming the original score was inflated
+- **Corrected model predicts trip intervention needs** — target includes Incomplete trips (mid-journey failures) + Completed trips with low ratings (Driver or Customer Rating < 4.0)
+- **Feature importance is evenly distributed (~14–25% each)** — no single feature dominates, meaning trip outcomes depend on factors not captured in this dataset (driver behaviour, vehicle condition, weather)
+- **Time features (Hour, Weekday, Month) have negligible effect** — peak-hour hypothesis tested and not supported; timing has no meaningful impact on non-completion
 - **Mobility equity gap identified** — peripheral pickup zones show non-completion rates up to ~1.2× the dataset average
-- **Synthetic data indicators** — all 48,000 non-completed bookings share identical placeholder values for distance (23.72 km) and fare (₹414), confirming the dataset is synthetically generated
 
 ---
 
 ## 📊 Model Performance
 
-| Metric | Score |
-|--------|-------|
-| Model | XGBoost |
-| 5-fold CV ROC-AUC | 0.9725 ± 0.0008 |
-| Test ROC-AUC | 0.9711 |
-| Avg Precision (PR Curve) | 0.9646 |
-| Accuracy | 0.94 |
-| F1 — Completed | 0.95 |
-| F1 — Cancelled | 0.92 |
+| Metric | Original (artifact) | Corrected |
+|--------|--------------------:|----------:|
+| Model | XGBoost | XGBoost |
+| Target | `is_cancelled` | `needs_intervention` |
+| 5-fold CV ROC-AUC | 0.9725 | 0.5593 |
+| Test ROC-AUC | 0.9711 | 0.5600 |
+| Avg Precision | 0.9646 | 0.4534 |
 
-> **Note on feature selection:** An earlier model using post-hoc features (driver ratings, customer ratings, CTAT) achieved AUC = 1.0 — this was identified as data leakage. The final model uses only features available at booking time, trained with XGBoost, producing a realistic Test ROC-AUC of 0.9711 and Avg Precision of 0.9646. All non-completion types are merged into a single binary target (`is_cancelled`) because the three cancellation categories share identical placeholder values for distance and fare, making per-type prediction infeasible.
+> **What happened:** The original cleaning pipeline applied unconditional median imputation to all rows, filling 48,000 cancelled bookings (trips that never started) with identical values (Distance = 23.72 km, Fare = ₹414). The original model achieved AUC 0.97 by detecting this imputation pattern — not real cancellation signals. After restricting imputation to only Completed + Incomplete orders (trips that actually started), we redefined the target as `needs_intervention` (Incomplete trips + Completed trips with either rating < 4.0). The corrected AUC of 0.56 reflects the honest predictive power of trip-start features. **An anomalously high AUC should always be investigated as a potential data leakage signal.**
 
 ---
 
