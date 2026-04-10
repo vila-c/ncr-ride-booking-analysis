@@ -1,0 +1,14 @@
+# ── Raw & uncompressed data (too large / regeneratable) ──────
+ncr_ride_bookings.csv
+cleaned_ncr_rides.csv
+cleaned_ncr_rides_with_target.csv
+dashboard_key_data.csv
+
+# ── Python cache ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# ── OS files ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
