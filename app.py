@@ -17,7 +17,7 @@ st.set_page_config(
 # ── Load data ─────────────────────────────────────────────────
 @st.cache_data
 def load_data():
-    df = pd.read_csv("cleaned_ncr_rides_with_target.csv",
+    df = pd.read_csv("cleaned_ncr_rides_with_target.csv.gz",
                      parse_dates=["Datetime"])
     return df
 
