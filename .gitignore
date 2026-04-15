@@ -3,6 +3,7 @@ ncr_ride_bookings.csv
 cleaned_ncr_rides.csv
 cleaned_ncr_rides_with_target.csv
 dashboard_key_data.csv
+vehicle_completion_rates.csv
 
 # ── Python cache ──────────────────────────────────────────────
 __pycache__/

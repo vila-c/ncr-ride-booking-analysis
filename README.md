@@ -5,7 +5,7 @@ An end-to-end data science project analysing **150,000 Delhi-NCR ride-booking re
 ## 🌐 Live Demo
 👉 [View Interactive Dashboard](https://vila-chung-ncr-analysis.streamlit.app/)
 
-> Features an interactive **Cancellation Risk Predictor** — enter a booking's distance, fare, and timing to see the predicted cancellation risk and what's driving it.
+> Features five interactive tabs — Overview, Time Analysis, Route Network, Model Insights, and SQL Explorer — with dynamic filters and data-driven annotations.
 
 ---
 
@@ -18,7 +18,7 @@ This project follows the **CRISP-DM** (Cross-Industry Standard Process for Data 
 | Business Understanding | — | Identify NCR ride cancellation drivers and equity gaps |
 | Data Understanding | `01_Cleaning` · `02_EDA` | Initial exploration, SQL analysis, Welch t-test, correlation heatmaps |
 | Data Preparation | `01_Cleaning` | Cleaning, feature engineering, missing value handling |
-| Modelling | `03_Data_Mining` | XGBoost classifier |
+| Modelling | `03_Data_Mining` | XGBoost classifier, K-Means risk clustering |
 | Evaluation | `03_Data_Mining` | ROC-AUC, Precision-Recall Curve, F1, Confusion Matrix |
 | Deployment | `app.py` | Streamlit interactive dashboard |
 
@@ -36,9 +36,8 @@ This project follows the **CRISP-DM** (Cross-Industry Standard Process for Data 
 Raw Data (150,000 records)
         ↓
 Data Cleaning & Feature Engineering  [01_Cleaning]
-  · Missing value imputation
+  · Missing value imputation (conditional — Completed + Incomplete only)
   · Datetime feature extraction (Hour, Weekday, Month)
-  · Label encoding for categorical variables
         ↓
 Exploratory Data Analysis            [02_EDA]
   · SQL-based analysis (SQLite)
@@ -46,9 +45,11 @@ Exploratory Data Analysis            [02_EDA]
   · Correlation heatmaps
         ↓
 Feature Selection (event-time only)  [03_Data_Mining]
+  · Label encoding for categorical variables (Vehicle Type)
   · Only features available at trip start
   · Removed post-hoc features (ratings used to define target, not as features)
   · Fixed cleaning-induced data leakage (AUC 0.97 → 0.56)
+  · K-Means clustering for trip risk segmentation
         ↓
 Train / Test Split
   · Stratified 75/25 split
@@ -60,9 +61,9 @@ XGBoost Classifier
   · Evaluated on ROC-AUC, Precision-Recall, F1, Confusion Matrix
         ↓
 Streamlit Dashboard                  [app.py]
-  · Interactive visualisations
-  · Route network graph
-  · Cancellation Risk Predictor
+  · Interactive visualisations with dynamic filters
+  · Region-coloured route network graph
+  · Model before/after comparison
   · SQL Explorer
 ```
 
@@ -74,8 +75,8 @@ Streamlit Dashboard                  [app.py]
 |------|-------------|
 | `01_Data_Cleaning_and_Preparation.ipynb` | Data wrangling, feature engineering, missing-value strategy |
 | `02_EDA_and_Statistics.ipynb` | EDA, SQL analysis, Welch t-test, correlation heatmaps |
-| `03_Data_Mining_and_Patterns.ipynb` | XGBoost classifier, full model evaluation |
-| `04_Visualization_Dashboard_and_Insights.ipynb` | Route network graph, equity gap analysis, business insights |
+| `03_Data_Mining_and_Patterns.ipynb` | XGBoost classifier, K-Means risk clustering, full model evaluation |
+| `04_Visualization_Dashboard_and_Insights.ipynb` | Equity gap analysis, hourly trends (Plotly), business & social insights |
 | `app.py` | Streamlit interactive dashboard |
 
 ---
@@ -142,5 +143,5 @@ Python · pandas · scikit-learn · XGBoost · Plotly · Seaborn · NetworkX · 
 
 ## 👤 Author
 
-Vila Chung · HKU BASc Social Data Science · 2027
+Vila Chung · HKU BASc Social Data Science · 2025
 [GitHub](https://github.com/vila-c/ncr-ride-booking-analysis)
