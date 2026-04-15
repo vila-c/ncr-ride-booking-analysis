@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import networkx as nx
 import sqlite3
 
@@ -23,11 +24,15 @@ def load_data():
 
 df = load_data()
 
+# Defensive fallback: ensure is_cancelled exists
+if "is_cancelled" not in df.columns:
+    df["is_cancelled"] = (df["Cancel_Type"] != "Completed").astype(int)
+
 # ── Header ────────────────────────────────────────────────────
 st.title("🚕 NCR Ride Booking Analytics Dashboard")
 st.markdown(
     "**Author: Vila Chung** · HKU BASc Social Data Science · 2025 · "
-    "[GitHub](https://github.com/[your-username]/ncr-ride-booking-analysis)"
+    "[GitHub](https://github.com/vila-c/ncr-ride-booking-analysis)"
 )
 st.caption(
     "Dataset: Uber Ride Analytics Dashboard · Kaggle (Yash Devladdha) · "
@@ -38,25 +43,23 @@ st.divider()
 # ── Sidebar filters ───────────────────────────────────────────
 st.sidebar.header("🔍 Filters")
 st.sidebar.markdown(
-    "**How to use these filters:**\n\n"
-    "**Step 1.** Select one or more **Vehicle Types** below to focus on "
-    "specific ride categories (e.g. Auto, Go Sedan). Removing a type hides "
-    "its bookings from all charts.\n\n"
-    "**Step 2.** Drag the **Hour of Day** slider to narrow the time window "
-    "(e.g. set 7–9 to see morning rush only).\n\n"
-    "All five tabs update automatically as you change filters."
+    "**Step 1.** Select **Vehicle Types** to focus on specific ride "
+    "categories.\n\n"
+    "**Step 2.** Drag the **Hour of Day** slider to narrow the time "
+    "window.\n\n"
+    "All five tabs update automatically."
 )
 st.sidebar.markdown("---")
 
 vehicle_filter = st.sidebar.multiselect(
-    "① Vehicle Type",
+    "Vehicle Type",
     options=sorted(df["Vehicle Type"].unique()),
     default=sorted(df["Vehicle Type"].unique()),
-    help="Select which vehicle types to include. All are selected by default."
+    help="Select which vehicle types to include."
 )
 hour_range = st.sidebar.slider(
-    "② Hour of Day", 0, 23, (0, 23),
-    help="Filter bookings by hour. Drag endpoints to narrow the range."
+    "Hour of Day", 0, 23, (0, 23),
+    help="Filter bookings by hour."
 )
 
 filtered = df[
@@ -77,14 +80,14 @@ completed = (filtered["Cancel_Type"] == "Completed").sum()
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Total Bookings",      f"{total:,}")
 col2.metric("Completion Rate",     f"{completed/total:.1%}")
-col3.metric("Non-completion Rate",   f"{1 - completed/total:.1%}",
-            help="Includes all non-completed bookings: Driver Cancelled, Customer Cancelled, No Driver Found, and Incomplete.")
-col4.metric("Avg Passenger Fare",   f"₹{filtered['Booking Value'].mean():.0f}",
-            help="Average fare for trips that actually started (Completed + Incomplete). "
-                 "Cancelled/No Driver Found bookings have no fare data.")
+col3.metric("Non-completion Rate", f"{1 - completed/total:.1%}",
+            help="Includes Driver Cancelled, Customer Cancelled, "
+                 "No Driver Found, and Incomplete.")
+col4.metric("Avg Passenger Fare",  f"₹{filtered['Booking Value'].mean():.0f}",
+            help="Average fare for trips that actually started "
+                 "(Completed + Incomplete).")
 col5.metric("Avg Ride Distance",   f"{filtered['Ride Distance'].mean():.1f} km",
-            help="Average distance for trips that actually started. "
-                 "NaN values (cancelled bookings) are excluded.")
+            help="Average distance for trips that actually started.")
 st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────
@@ -96,26 +99,25 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🗄️ SQL Explorer",
 ])
 
-# ── Tab 1: Overview ───────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# Tab 1: Overview
+# ══════════════════════════════════════════════════════════════
 with tab1:
     st.subheader("Booking Status & Vehicle Distribution")
 
-    st.warning(
-        "**Important note on data cleaning:** During our analysis, we discovered "
-        "that the original cleaning pipeline (Notebook 01) applied **unconditional "
-        "median imputation** to all rows — including 48,000 cancelled/no-driver "
-        "bookings where Ride Distance, Fare, and Ratings were legitimately missing "
-        "(the trip never started, so no real values exist). This produced identical "
-        "placeholder values (Distance = 23.72 km, Fare = ₹414) for all non-started "
-        "trips, which the original XGBoost model learned to detect (AUC 0.97). "
-        "**We fixed this** by restricting imputation to only Completed and Incomplete "
-        "orders (trips that actually started). The corrected model now predicts "
-        "**trip intervention needs** (mid-trip failures + poor ratings) with an "
-        "honest AUC of ~0.56, confirming that the available features have limited "
-        "predictive power for trip outcomes. "
-        "**Lesson learned: an anomalously high AUC (> 0.95) should always be "
-        "investigated as a potential data leakage signal.**"
-    )
+    with st.expander("⚠️ Data cleaning correction applied — click for details"):
+        st.markdown(
+            "The original cleaning pipeline applied **unconditional median "
+            "imputation** to all rows, filling ~48,000 cancelled bookings "
+            "(trips that never started) with identical placeholder values "
+            "(Distance = 23.72 km, Fare = ₹414). The original XGBoost model "
+            "learned to detect this imputation pattern (AUC 0.97), not real "
+            "cancellation signals.\n\n"
+            "**Fix applied:** Imputation restricted to Completed + Incomplete "
+            "trips only. Corrected model AUC = ~0.56.\n\n"
+            "**Lesson:** An anomalously high AUC (> 0.95) should always be "
+            "investigated as a potential data leakage signal."
+        )
 
     c1, c2 = st.columns(2)
 
@@ -142,15 +144,18 @@ with tab1:
         fig2.update_traces(textposition="inside", textinfo="percent+label")
         st.plotly_chart(fig2, use_container_width=True)
 
+    # Compute dynamic stats for the insight box
+    _comp_pct = (filtered["Cancel_Type"] == "Completed").mean() * 100
+    _drv_pct = (filtered["Cancel_Type"] == "Driver Cancelled").mean() * 100
+    _nodrv_pct = (filtered["Cancel_Type"] == "No Driver Found").mean() * 100
+    _cust_pct = (filtered["Cancel_Type"] == "Customer Cancelled").mean() * 100
+
     st.info(
-        "**What these charts show:** The bar chart (left) counts how many bookings "
-        "ended in each outcome. **Completed** is the tallest bar at ~93,000 bookings. "
-        "The remaining ~57,000 bookings failed, split across four categories. "
-        "The pie chart (right) shows the same data as percentages: only **62%** of "
-        "rides actually completed. The biggest failure mode is **Driver Cancelled** "
-        "(18%), followed by **No Driver Found** (7%) and **Customer Cancelled** (7%) "
-        "— both supply-side problems where the platform could not match the passenger "
-        "with a willing driver. **Incomplete** rides account for 6%."
+        f"**Key finding:** Only **{_comp_pct:.0f}%** of rides completed. "
+        f"The biggest failure modes are **Driver Cancelled** ({_drv_pct:.0f}%) "
+        f"and **No Driver Found** ({_nodrv_pct:.0f}%) — both supply-side "
+        f"problems. Customer-initiated cancellations account for just "
+        f"{_cust_pct:.0f}%."
     )
 
     st.subheader("Vehicle Type Performance")
@@ -173,19 +178,18 @@ with tab1:
     ]
     st.dataframe(vehicle_stats, use_container_width=True, hide_index=True)
 
+    _vmin = vehicle_stats["Non-completion Rate (%)"].min()
+    _vmax = vehicle_stats["Non-completion Rate (%)"].max()
     st.info(
-        "**What this table shows:** All seven vehicle types have non-completion rates "
-        "clustered tightly between 37% and 39%. This **near-identical spread is itself "
-        "a key finding** — it means vehicle type has virtually no impact on whether a "
-        "ride gets completed. Whether a passenger books an Auto (cheapest) or a Prime "
-        "SUV (most expensive), the odds of non-completion are statistically the same. "
-        "Note: Avg Passenger Fare and Avg Distance are calculated only from trips that "
-        "actually started (Completed + Incomplete); cancelled bookings have no real "
-        "distance or fare data."
+        f"**Key finding:** All vehicle types have non-completion rates between "
+        f"**{_vmin:.0f}%** and **{_vmax:.0f}%** — vehicle type has virtually "
+        f"no impact on whether a ride gets completed."
     )
 
 
-# ── Tab 2: Time Analysis ──────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# Tab 2: Time Analysis
+# ══════════════════════════════════════════════════════════════
 with tab2:
     st.subheader("Hourly Booking Volume vs. Non-completion Rate")
     hourly = (
@@ -215,24 +219,20 @@ with tab2:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
+    _peak_hour = hourly["Volume"].idxmax()
+    _peak_vol = hourly.loc[_peak_hour, "Volume"]
+    _rate_range = hourly["Cancel_Rate"].max() - hourly["Cancel_Rate"].min()
     st.info(
-        "**What this chart shows:** This is a dual-axis chart. The **blue bars** "
-        "(left axis) show how many bookings were placed at each hour. The **red "
-        "line** (right axis) shows the non-completion rate at that hour.\n\n"
-        "**Key finding:** Booking volume peaks during the evening rush (17–19 PM, "
-        "with hour 18 the single highest at ~12,400 bookings), and a secondary "
-        "peak around 10 AM, matching typical commuting patterns. However, the red "
-        "non-completion line is almost perfectly flat at ~38% across all 24 hours. "
-        "Whether someone books at 3 AM or 6 PM, the probability of non-completion "
-        "is essentially the same. "
-        "**Time of day alone does not drive non-completion in this dataset.**"
+        f"**Key finding:** Booking volume peaks at hour {_peak_hour} "
+        f"(~{_peak_vol:,.0f} bookings), but the non-completion rate stays "
+        f"flat across all 24 hours (range: just {_rate_range:.1f} pp). "
+        f"**Time of day does not drive non-completion in this dataset.**"
     )
 
-    with st.expander("📋 Hypothesis validation: does peak hour have higher non-completion?"):
+    with st.expander("📋 Hypothesis test: does peak hour have higher non-completion?"):
         st.markdown(
-            "**Hypothesis:** Morning rush (7–9 AM) and evening rush (17–20 PM) "
-            "should show higher non-completion rates because supply-demand "
-            "imbalance is more severe during commuting hours."
+            "**Hypothesis:** Rush hours (7–9 AM, 17–20 PM) should show "
+            "higher non-completion due to supply-demand imbalance."
         )
         def _time_bin(h):
             if h in (7, 8, 9): return "Morning Rush (7–9)"
@@ -255,11 +255,8 @@ with tab2:
         st.dataframe(_tb_stats, use_container_width=True, hide_index=True)
         _range = _tb_stats["Non-completion Rate (%)"].max() - _tb_stats["Non-completion Rate (%)"].min()
         st.markdown(
-            f"**Result:** The range across all time bins is just **{_range:.2f} "
-            f"percentage points**. Morning Rush and Evening Rush do not show "
-            f"meaningfully higher non-completion rates than off-peak hours. "
-            f"**The hypothesis is not supported by this dataset** — time of day "
-            f"has negligible impact on booking outcomes."
+            f"**Result:** Range across all time bins is just **{_range:.2f} pp**. "
+            f"**Hypothesis not supported** — time of day has negligible impact."
         )
 
     st.subheader("Weekday vs Weekend Comparison")
@@ -292,35 +289,41 @@ with tab2:
         )
         st.plotly_chart(fig_day2, use_container_width=True)
 
-    st.info(
-        "**What these charts show:** The left chart compares total booking volume "
-        "between weekdays and weekends. The right chart compares their non-completion "
-        "rates.\n\n"
-        "**Key finding:** Both the volume split (~71% weekday / ~29% weekend) and the "
-        "non-completion rates are nearly identical — weekday 38.1% vs weekend 37.7%, "
-        "a difference of just 0.4 percentage points. **This is not a meaningful "
-        "difference.** In real ride-hailing data, you would expect weekend patterns "
-        "to differ noticeably (different trip types, different driver availability)."
-    )
+    if len(day_stats) == 2:
+        _wd_rate = day_stats.loc[day_stats["Day_Type"] == "Weekday", "Cancel_Rate"].values[0]
+        _we_rate = day_stats.loc[day_stats["Day_Type"] == "Weekend", "Cancel_Rate"].values[0]
+        st.info(
+            f"**Key finding:** Weekday ({_wd_rate}%) vs Weekend ({_we_rate}%) "
+            f"non-completion rates differ by just "
+            f"**{abs(_wd_rate - _we_rate):.1f} pp** — not meaningful."
+        )
 
 
-# ── Tab 3: Route Network ──────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# Tab 3: Route Network — REDESIGNED
+# ══════════════════════════════════════════════════════════════
 with tab3:
-    st.subheader("Popular Route Network Graph")
+    st.subheader("Route Network & Mobility Equity Analysis")
     st.markdown(
-        "This graph shows the most popular routes in the NCR ride network. "
-        "Use the slider below to control how many routes are shown."
-    )
-    st.markdown(
-        "Edge **thickness** = booking volume · "
-        "Edge **colour** = non-completion rate (green = low, red = high)"
+        "This section maps the NCR ride network to reveal **which corridors "
+        "are well-served** and **which are underserved**. Nodes represent "
+        "pickup/drop locations; edges represent booked routes."
     )
 
-    # ── Location classifier (used by expander and descriptions) ──
+    # ── Location classifier ──────────────────────────────────
     _all_locs = sorted(set(
         filtered["Pickup Location"].unique().tolist()
         + filtered["Drop Location"].unique().tolist()
     ))
+
+    REGION_COLORS = {
+        "Delhi":     "#4393c3",
+        "Gurgaon":   "#2ca02c",
+        "Noida":     "#ff7f0e",
+        "Faridabad": "#9467bd",
+        "Ghaziabad": "#d62728",
+        "Outer NCR": "#8c564b",
+    }
 
     def _classify_ncr(name):
         n = name.lower()
@@ -349,55 +352,114 @@ with tab3:
 
     _loc_map = {loc: _classify_ncr(loc) for loc in _all_locs}
 
-    # ── Top 10 Popular Routes reference table ──
-    _top_routes = (
-        filtered.groupby(["Pickup Location", "Drop Location"])
-        .agg(Bookings=("Booking ID", "count"),
-             NonComp=("is_cancelled", "mean"))
-        .assign(NonComp=lambda x: (x["NonComp"] * 100).round(1))
-        .reset_index()
-        .sort_values("Bookings", ascending=False)
-        .head(10)
-        .reset_index(drop=True)
-    )
-    _top_routes["Pickup Region"] = _top_routes["Pickup Location"].map(_loc_map)
-    _top_routes["Drop Region"] = _top_routes["Drop Location"].map(_loc_map)
-    _top_routes = _top_routes[[
-        "Pickup Location", "Pickup Region",
-        "Drop Location", "Drop Region",
-        "Bookings", "NonComp"
-    ]]
-    _top_routes.columns = [
-        "Pickup", "Pickup Region", "Drop", "Drop Region",
-        "Bookings", "Non-completion Rate (%)"
-    ]
-
-    with st.expander("📍 Top 10 most popular routes — with NCR region reference"):
-        st.markdown(
-            "The table below shows the **10 busiest routes** by booking volume, "
-            "along with each location's NCR region. In Indian urban planning, "
-            "**'Sector'** is a standard neighbourhood subdivision used in planned "
-            "cities such as Noida, Gurgaon, and Faridabad (e.g. *Noida Sector 18* "
-            "and *Noida Sector 62* are both in Noida but 10–15 km apart).\n\n"
-            "**Note:** Distance and fare columns are excluded because cancelled "
-            "bookings have no real trip data (the ride never started), which would "
-            "skew the per-route averages."
-        )
-        st.dataframe(_top_routes, use_container_width=True, hide_index=True)
-
-    n_routes = st.slider(
-        "Number of top routes to display", 20, 100, 50,
-        help="Drag to show more or fewer routes. Start with 30-50 for a clear picture."
-    )
-
-    route_data = (
+    # ── Compute route data ───────────────────────────────────
+    all_route_data = (
         filtered.groupby(["Pickup Location", "Drop Location"])
         .agg(count=("is_cancelled", "size"),
              cancel_rate=("is_cancelled", "mean"))
         .reset_index()
         .sort_values("count", ascending=False)
-        .head(n_routes)
     )
+
+    # ── Section 1: Summary Metrics ───────────────────────────
+    _total_corridors = len(all_route_data)
+    _high_risk_routes = len(all_route_data[
+        (all_route_data["cancel_rate"] > 0.45) &
+        (all_route_data["count"] > 5)
+    ])
+
+    # Region-level non-completion rates
+    _region_cancel = (
+        filtered.assign(Region=filtered["Pickup Location"].map(_loc_map))
+        .groupby("Region")["is_cancelled"]
+        .agg(["mean", "count"])
+        .query("count > 100")
+        .sort_values("mean", ascending=False)
+    )
+    if len(_region_cancel) >= 2:
+        _worst_region = _region_cancel.index[0]
+        _worst_rate = _region_cancel["mean"].iloc[0] * 100
+        _best_region = _region_cancel.index[-1]
+        _best_rate = _region_cancel["mean"].iloc[-1] * 100
+        _equity_gap = _worst_rate - _best_rate
+    else:
+        _worst_region, _best_region = "N/A", "N/A"
+        _worst_rate, _best_rate, _equity_gap = 0, 0, 0
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Route Corridors", f"{_total_corridors:,}")
+    m2.metric("High-Risk Routes (>45%)", f"{_high_risk_routes}")
+    m3.metric("Equity Gap (worst vs best region)",
+              f"{_equity_gap:.1f} pp",
+              help=f"Difference between {_worst_region} ({_worst_rate:.1f}%) "
+                   f"and {_best_region} ({_best_rate:.1f}%)")
+
+    st.divider()
+
+    # ── Section 2: Regional Overview (bar chart) ─────────────
+    st.markdown("#### Non-completion Rate by Region")
+    st.caption(
+        "Each bar shows the non-completion rate for all bookings originating "
+        "from that NCR region. Regions with fewer than 100 bookings are excluded."
+    )
+
+    _region_df = (
+        _region_cancel.reset_index()
+        .assign(Rate=lambda x: (x["mean"] * 100).round(1))
+        .rename(columns={"Region": "NCR Region", "count": "Bookings"})
+        .sort_values("Rate", ascending=True)
+    )
+
+    _avg_overall = filtered["is_cancelled"].mean() * 100
+
+    fig_region = px.bar(
+        _region_df, x="Rate", y="NCR Region", orientation="h",
+        color="Rate",
+        color_continuous_scale=["#2ca02c", "#fee08b", "#d73027"],
+        range_color=[_region_df["Rate"].min() - 1, _region_df["Rate"].max() + 1],
+        template="plotly_white",
+        labels={"Rate": "Non-completion Rate (%)"},
+        text="Rate",
+        hover_data={"Bookings": ":,"},
+    )
+    fig_region.add_vline(
+        x=_avg_overall, line_dash="dash", line_color="black",
+        annotation_text=f"Avg: {_avg_overall:.1f}%",
+        annotation_position="top right"
+    )
+    fig_region.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+    fig_region.update_layout(
+        height=300,
+        coloraxis_showscale=False,
+        yaxis_title="",
+        margin=dict(l=0, r=40, t=10, b=0),
+    )
+    st.plotly_chart(fig_region, use_container_width=True)
+
+    if _equity_gap > 0:
+        st.info(
+            f"**Equity gap:** **{_worst_region}** has a non-completion rate of "
+            f"**{_worst_rate:.1f}%**, which is **{_equity_gap:.1f} pp higher** "
+            f"than **{_best_region}** ({_best_rate:.1f}%). Passengers in "
+            f"peripheral zones face systematically worse service."
+        )
+
+    st.divider()
+
+    # ── Section 3: Network Graph ─────────────────────────────
+    st.markdown("#### Route Network Graph")
+
+    col_ctrl1, col_ctrl2 = st.columns([3, 1])
+    with col_ctrl1:
+        n_routes = st.slider(
+            "Number of top routes to display", 10, 60, 30,
+            help="Fewer routes = clearer graph. Start with 30."
+        )
+    with col_ctrl2:
+        show_all_labels = st.checkbox("Show all labels", value=False,
+                                      help="Display labels on every node")
+
+    route_data = all_route_data.head(n_routes).copy()
 
     G = nx.DiGraph()
     for _, row in route_data.iterrows():
@@ -405,118 +467,232 @@ with tab3:
                    weight=row["count"],
                    cancel_rate=row["cancel_rate"] * 100)
 
-    pos = nx.spring_layout(G, k=0.5, seed=42)
+    pos = nx.spring_layout(G, k=0.6, seed=42, iterations=60)
     edge_list   = list(G.edges(data=True))
     max_count   = route_data["count"].max()
-    edge_widths = [d["weight"] / max_count * 8 for _, _, d in edge_list]
+    edge_widths = [d["weight"] / max_count * 6 + 0.5 for _, _, d in edge_list]
     edge_colors = [d["cancel_rate"] for _, _, d in edge_list]
 
-    fig4, ax = plt.subplots(figsize=(12, 8))
+    # Node properties
+    node_regions = [_loc_map.get(n, "Delhi") for n in G.nodes()]
+    node_colors  = [REGION_COLORS.get(r, "#999999") for r in node_regions]
+    node_degrees = [G.degree(n) for n in G.nodes()]
+    max_deg = max(node_degrees) if node_degrees else 1
+    node_sizes   = [300 + (d / max_deg) * 1200 for d in node_degrees]
+
+    # Determine which nodes get labels
+    if show_all_labels:
+        labels = {n: n for n in G.nodes()}
+    else:
+        # Show labels for: top hubs (degree > 2) or high-risk endpoints
+        high_risk_nodes = set()
+        for u, v, d in edge_list:
+            if d["cancel_rate"] > 50:
+                high_risk_nodes.add(u)
+                high_risk_nodes.add(v)
+        labels = {
+            n: n for n in G.nodes()
+            if G.degree(n) > 2 or n in high_risk_nodes
+        }
+
+    # Draw
+    fig4, ax = plt.subplots(figsize=(14, 9))
+
+    # Edges
     nx.draw_networkx_edges(G, pos, ax=ax,
         edgelist=[(u, v) for u, v, _ in edge_list],
         width=edge_widths, edge_color=edge_colors,
-        edge_cmap=plt.cm.RdYlGn_r, arrows=True, alpha=0.7)
+        edge_cmap=plt.cm.RdYlGn_r, arrows=True,
+        arrowsize=12, alpha=0.6,
+        connectionstyle="arc3,rad=0.1",
+        min_source_margin=12, min_target_margin=12)
+
+    # Nodes (colored by region)
     nx.draw_networkx_nodes(G, pos, ax=ax,
-        node_size=[G.degree(n) * 80 for n in G.nodes()],
-        node_color="lightblue", edgecolors="black")
-    labels = {n: n for n in G.nodes() if G.degree(n) > 3}
-    nx.draw_networkx_labels(G, pos, labels, font_size=7, ax=ax)
+        node_size=node_sizes,
+        node_color=node_colors,
+        edgecolors="white", linewidths=1.5, alpha=0.9)
+
+    # Labels
+    nx.draw_networkx_labels(G, pos, labels, font_size=7,
+                            font_weight="bold", ax=ax)
+
+    # Colorbar for edges
     sm = plt.cm.ScalarMappable(
         cmap=plt.cm.RdYlGn_r,
-        norm=plt.Normalize(vmin=min(edge_colors), vmax=max(edge_colors))
+        norm=plt.Normalize(
+            vmin=min(edge_colors) if edge_colors else 0,
+            vmax=max(edge_colors) if edge_colors else 100
+        )
     )
     sm.set_array([])
-    fig4.colorbar(sm, ax=ax, label="Non-completion Rate (%)")
+    cbar = fig4.colorbar(sm, ax=ax, shrink=0.6, pad=0.02)
+    cbar.set_label("Route Non-completion Rate (%)", fontsize=9)
+
+    # Region legend
+    legend_handles = [
+        mpatches.Patch(color=c, label=r)
+        for r, c in REGION_COLORS.items()
+        if r in set(node_regions)
+    ]
+    if legend_handles:
+        ax.legend(handles=legend_handles, title="NCR Region",
+                  loc="lower left", fontsize=8, title_fontsize=9,
+                  framealpha=0.9)
+
+    ax.set_title(
+        f"Top {n_routes} Routes — Node colour = region, "
+        f"Edge colour = non-completion rate",
+        fontsize=11, pad=12
+    )
     ax.axis("off")
+    plt.tight_layout()
     st.pyplot(fig4)
 
-    # Find the top hub nodes dynamically
+    # Reading guide
+    st.markdown(
+        "**How to read this graph:**\n"
+        "- **Node colour** = NCR region (see legend)\n"
+        "- **Node size** = number of routes connected (larger = busier hub)\n"
+        "- **Edge colour** = non-completion rate "
+        "(🟢 green = good, 🟡 yellow = moderate, 🔴 red = underserved)\n"
+        "- **Edge thickness** = booking volume (thicker = more popular)"
+    )
+
+    # Dynamic insight
     _top_hubs = sorted(G.nodes(), key=lambda n: G.degree(n), reverse=True)[:3]
-    _hub_names = ", ".join(_top_hubs)
-
+    _hub_regions = [_loc_map.get(h, "Delhi") for h in _top_hubs]
+    _hub_text = ", ".join(
+        [f"**{h}** ({r})" for h, r in zip(_top_hubs, _hub_regions)]
+    )
     st.info(
-        "**What this graph shows:** This is a **directed network graph** where each "
-        "circle (node) represents a pickup or drop-off location in the NCR region. "
-        "Arrows between nodes represent routes that passengers actually booked.\n\n"
-        "**How to read it:**\n"
-        "- **Line thickness** = how many bookings occurred on that route (thicker = "
-        "more popular)\n"
-        "- **Line colour** = non-completion rate on that route (**green** = low "
-        "non-completion, good service; **yellow** = moderate; **red** = high "
-        "non-completion, underserved)\n"
-        "- **Circle size** = how many routes connect to that location (larger = "
-        "more connected hub)\n\n"
-        f"**Key trend:** The most connected hubs in the current view are "
-        f"**{_hub_names}**. Routes radiating outward to less-connected peripheral "
-        f"nodes tend to show warmer (redder) colours, indicating higher non-completion "
-        f"rates on corridors leading away from the city centre. "
-        f"Expand the **Top 10 most popular routes** table above to see which "
-        f"NCR region each location belongs to (e.g. Delhi vs. Gurgaon / Noida)."
+        f"**Key hubs:** {_hub_text}. Routes extending to peripheral nodes "
+        f"tend to show warmer (redder) colours, indicating higher "
+        f"non-completion rates on corridors away from city centres."
     )
 
-    st.subheader("Top 10 Highest-Risk Routes")
-    top_risk = (
-        route_data[route_data["count"] > 1]
-        .assign(cancel_rate=lambda x: (x["cancel_rate"] * 100).round(1))
-        .sort_values("cancel_rate", ascending=False)
-        .head(10)
-        .reset_index(drop=True)
-    )
-    top_risk.columns = ["Pickup", "Drop", "Total Bookings", "Non-completion Rate (%)"]
-    st.dataframe(top_risk, use_container_width=True, hide_index=True)
+    st.divider()
+
+    # ── Section 4: Top Routes Tables ─────────────────────────
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.markdown("#### Busiest Routes")
+        _top_routes = (
+            all_route_data.head(10)
+            .assign(cancel_rate=lambda x: (x["cancel_rate"] * 100).round(1))
+            .reset_index(drop=True)
+        )
+        _top_routes["Pickup Region"] = _top_routes["Pickup Location"].map(_loc_map)
+        _top_routes["Drop Region"] = _top_routes["Drop Location"].map(_loc_map)
+        _display_top = _top_routes[[
+            "Pickup Location", "Pickup Region",
+            "Drop Location", "Drop Region",
+            "count", "cancel_rate"
+        ]].copy()
+        _display_top.columns = [
+            "Pickup", "Region", "Drop", "Region ",
+            "Bookings", "Non-comp (%)"
+        ]
+        st.dataframe(_display_top, use_container_width=True, hide_index=True)
+
+    with col_right:
+        st.markdown("#### Highest-Risk Routes")
+        top_risk = (
+            all_route_data[all_route_data["count"] > 5]
+            .assign(cancel_rate=lambda x: (x["cancel_rate"] * 100).round(1))
+            .sort_values("cancel_rate", ascending=False)
+            .head(10)
+            .reset_index(drop=True)
+        )
+        top_risk["Pickup Region"] = top_risk["Pickup Location"].map(_loc_map)
+        top_risk["Drop Region"] = top_risk["Drop Location"].map(_loc_map)
+        _display_risk = top_risk[[
+            "Pickup Location", "Pickup Region",
+            "Drop Location", "Drop Region",
+            "count", "cancel_rate"
+        ]].copy()
+        _display_risk.columns = [
+            "Pickup", "Region", "Drop", "Region ",
+            "Bookings", "Non-comp (%)"
+        ]
+        st.dataframe(_display_risk, use_container_width=True, hide_index=True)
 
     if len(top_risk) > 0:
-        _worst_pickup = top_risk.iloc[0]["Pickup"]
-        _worst_drop   = top_risk.iloc[0]["Drop"]
-        _worst_rate   = top_risk.iloc[0]["Non-completion Rate (%)"]
+        _worst_pickup = top_risk.iloc[0]["Pickup Location"]
+        _worst_drop   = top_risk.iloc[0]["Drop Location"]
+        _worst_rate_r = top_risk.iloc[0]["cancel_rate"]
+        _worst_p_region = _loc_map.get(_worst_pickup, "")
+        _worst_d_region = _loc_map.get(_worst_drop, "")
         st.info(
-            f"**What this table shows:** The 10 routes with the highest non-completion "
-            f"rates (among routes with more than 1 booking). The worst-performing route "
-            f"is **{_worst_pickup} \u2192 {_worst_drop}** at **{_worst_rate}%** non-completion. "
-            f"Compare this to the dataset average of ~38%. Routes where either the "
-            f"pickup or drop location is in a suburban region (see the "
-            f"**Top 10 routes** table above for region classifications) tend to "
-            f"cluster near the top of this list, suggesting a **mobility equity "
-            f"gap** \u2014 passengers "
-            f"in outer zones face systematically worse service because drivers are less "
-            f"willing to accept longer trips with lower return-trip demand."
+            f"**Worst corridor:** {_worst_pickup} ({_worst_p_region}) → "
+            f"{_worst_drop} ({_worst_d_region}) at **{_worst_rate_r}%** "
+            f"non-completion (dataset avg: ~{_avg_overall:.0f}%). "
+            f"Suburban and cross-region routes dominate the high-risk list, "
+            f"suggesting a **mobility equity gap** — passengers in outer zones "
+            f"face worse service due to lower driver supply."
+        )
+
+    with st.expander("💡 NCR Region Reference"):
+        st.markdown(
+            "In Indian urban planning, **'Sector'** is a standard neighbourhood "
+            "subdivision in planned cities (e.g. *Noida Sector 18* and "
+            "*Noida Sector 62* are both in Noida but 10–15 km apart).\n\n"
+            "| Region | Key Areas |\n"
+            "|--------|----------|\n"
+            "| Delhi | Connaught Place, Saket, Dwarka, Rohini, etc. |\n"
+            "| Gurgaon | DLF, Cyber Hub, Sikanderpur, Udyog Vihar |\n"
+            "| Noida | Sectors 18/62/125, Greater Noida |\n"
+            "| Ghaziabad | Indirapuram, Vaishali, Kaushambi |\n"
+            "| Faridabad | Old/New Faridabad, NIT |\n"
+            "| Outer NCR | Meerut, Sonipat, Panipat, Bhiwadi |"
         )
 
 
-# ── Tab 4: Model Insights ─────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# Tab 4: Model Insights
+# ══════════════════════════════════════════════════════════════
 with tab4:
-    st.subheader("Trip Intervention Prediction Model — XGBoost")
+    st.subheader("Trip Intervention Prediction Model")
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Model",         "XGBoost")
-    col2.metric("CV Folds",      "5-fold")
-    col3.metric("Test AUC",      "0.56")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Model", "XGBoost")
+    col2.metric("CV Folds", "5-fold")
+    col3.metric("Test AUC", "0.56")
+    col4.metric("Avg Precision", "0.45")
 
-    st.markdown("""
-    ### What changed: cleaning error → model correction
+    st.divider()
 
-    Our original model achieved an **AUC of 0.97** — but this was a **false signal**.
-    The cleaning pipeline (Notebook 01) had applied unconditional median imputation
-    to *all* rows, filling 48,000 cancelled bookings (which never started) with
-    identical values: Distance = 23.72 km, Fare = ₹414. The model was simply
-    detecting "which rows were imputed" — not learning real cancellation patterns.
+    # Before / After comparison
+    st.markdown("#### What Changed: Data Cleaning Error → Model Correction")
 
-    **After fixing the cleaning script** (restricting imputation to trips that
-    actually started), we redesigned the model:
+    col_before, col_after = st.columns(2)
+    with col_before:
+        st.error("**Before (artifact)**")
+        st.markdown(
+            "- Target: `is_cancelled`\n"
+            "- AUC: **0.97** (false signal)\n"
+            "- Model detected imputation pattern, not real cancellation signals\n"
+            "- 48K cancelled rows filled with identical placeholders "
+            "(Dist=23.72 km, Fare=₹414)"
+        )
+    with col_after:
+        st.success("**After (corrected)**")
+        st.markdown(
+            "- Target: `needs_intervention`\n"
+            "- AUC: **0.56** (honest)\n"
+            "- Imputation restricted to trips that actually started\n"
+            "- Features: only trip-start info (Distance, Fare, Hour, "
+            "Weekday, Month, Vehicle Type)\n"
+            "- Ratings define target, not used as features (no leakage)"
+        )
 
-    - **Target:** `needs_intervention` = 1 when the trip was Incomplete (broke down
-      mid-journey) OR Completed with either Driver or Customer Rating < 4.0
-    - **Data:** 102,000 rows (Completed + Incomplete only — trips with real data)
-    - **Features:** Only information available at trip start: Distance, Fare, Hour,
-      Weekday, Month, Vehicle Type
-    - **Ratings** are used to *define* the target (what counts as a bad outcome),
-      NOT as input features — so there is no data leakage
-    """)
+    st.divider()
 
-    st.subheader("Feature Importance")
+    st.markdown("#### Feature Importance")
     fi = {
         "Ride Distance": 0.2505,
-        "Booking Value (Passenger Fare)": 0.1606,
+        "Booking Value": 0.1606,
         "Hour": 0.1505,
         "Month": 0.1493,
         "Weekday": 0.1463,
@@ -530,61 +706,55 @@ with tab4:
         title="Feature Importance Scores (corrected model)",
         color="Importance", color_continuous_scale="Blues",
         template="plotly_white",
-        labels={"Importance": "Importance Score"}
+        labels={"Importance": "Importance Score"},
+        text="Importance",
     )
+    fig5.update_traces(texttemplate="%{text:.1%}", textposition="outside")
+    fig5.update_layout(coloraxis_showscale=False)
     st.plotly_chart(fig5, use_container_width=True)
 
     st.info(
-        "**Reading this chart:** Unlike the original model where Ride Distance "
-        "dominated at 92.7%, the corrected model shows **roughly even importance** "
-        "across all features (~14–25% each). No single feature stands out as a "
-        "strong predictor of poor trip outcomes. This means that whether a trip "
-        "results in a breakdown or low rating is driven by factors **not captured "
-        "in this dataset** — such as driver behaviour, vehicle condition, traffic, "
-        "or weather."
+        "**Key finding:** Feature importance is **evenly distributed** "
+        "(~14–25% each). No single feature strongly predicts trip outcomes. "
+        "Trip quality is driven by factors **not in this dataset** — driver "
+        "behaviour, vehicle condition, traffic, weather."
     )
 
-    st.markdown("""
-    ### Key Findings
+    st.divider()
 
-    - **AUC = 0.56** — the model performs only slightly better than random,
-      confirming that trip-start features alone cannot reliably predict poor outcomes
-    - **Feature importance is evenly distributed** — no single feature dominates,
-      unlike the artifact-inflated original where Distance was 92.7%
-    - **An anomalously high AUC (> 0.95) should always be investigated** — our
-      original 0.97 turned out to be a data cleaning artifact, not real predictive power
+    st.markdown("#### Takeaways")
+    st.markdown(
+        "1. **AUC > 0.95 is a red flag** — our original 0.97 was a data "
+        "artifact, not real predictive power.\n"
+        "2. **Trip-start features alone cannot predict outcomes** — the "
+        "corrected AUC of 0.56 confirms limited predictive power.\n"
+        "3. **Honesty over inflation** — reporting the corrected (lower) "
+        "score is more valuable than keeping the inflated one."
+    )
 
-    ### Lesson Learned
-    This project demonstrates a critical real-world data science workflow:
-    discovering a data pipeline error, diagnosing its downstream impact,
-    correcting it, and **honestly reporting** the revised (lower) model
-    performance. The corrected AUC of 0.56 is the truth — and recognising
-    that truth is more valuable than reporting an inflated 0.97.
-
-    ### Social Data Science Lens
-    Underserved urban corridors show systematically higher non-completion rates,
-    raising **mobility equity** concerns for lower-income zones with limited
-    alternative transport options.
-    """)
+    with st.expander("🔬 Social Data Science Lens"):
+        st.markdown(
+            "Underserved urban corridors show systematically higher "
+            "non-completion rates, raising **mobility equity** concerns "
+            "for peripheral zones with limited alternative transport. "
+            "Platform optimisation for profitability may unintentionally "
+            "disadvantage communities in these areas."
+        )
 
 
-# ── Tab 5: SQL Explorer ───────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# Tab 5: SQL Explorer
+# ══════════════════════════════════════════════════════════════
 with tab5:
-    st.subheader("🗄️ SQL Query Explorer")
+    st.subheader("SQL Query Explorer")
     st.markdown(
-        "Run SQL queries directly on the dataset using an in-memory SQLite database. "
-        "This demonstrates the ability to work with both DataFrame and SQL-based workflows."
+        "Run SQL queries on the dataset using an in-memory SQLite database. "
+        "Pick a preset or write your own query."
     )
 
-    st.markdown(
-        "**How to use this tool:**\n\n"
-        "**Step 1.** Pick a **preset query** from the dropdown below — each one "
-        "answers a specific business question.\n\n"
-        "**Step 2.** Review the SQL code in the text area. You can **edit it** to "
-        "customise the analysis (e.g. change `LIMIT 10` to `LIMIT 20`).\n\n"
-        "**Step 3.** Click the **Run Query** button to execute and see results.\n\n"
-        "💡 *Tip: The table name is `rides`. Column names use snake_case "
-        "(e.g. `vehicle_type`, `ride_distance`, `is_cancelled`).*"
+    st.caption(
+        "Table name: `rides` · Column names: snake_case "
+        "(e.g. `vehicle_type`, `ride_distance`, `is_cancelled`)"
     )
 
     # Load data into SQLite
@@ -601,7 +771,6 @@ with tab5:
 
     conn = get_connection()
 
-    # Preset queries
     PRESETS = {
         "Non-completion rate by vehicle type": """
 SELECT   vehicle_type,
@@ -642,20 +811,16 @@ ORDER BY total_bookings DESC""",
     }
 
     preset = st.selectbox(
-        "① Choose a preset query:",
+        "Choose a preset query:",
         list(PRESETS.keys()),
-        help="Each preset answers a different business question about the dataset."
+        help="Each preset answers a different business question."
     )
-    query  = st.text_area("② SQL Query (editable):", value=PRESETS[preset], height=160)
+    query = st.text_area("SQL Query (editable):", value=PRESETS[preset], height=160)
 
-    if st.button("③ ▶ Run Query"):
+    if st.button("▶ Run Query"):
         try:
             result = pd.read_sql(query, conn)
             st.success(f"Query returned {len(result)} rows.")
             st.dataframe(result, use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"SQL Error: {e}")
-
-
-
-
