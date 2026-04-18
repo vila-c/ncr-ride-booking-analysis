@@ -36,7 +36,7 @@ st.markdown(
 )
 st.caption(
     "Dataset: Uber Ride Analytics Dashboard · Kaggle (Yash Devladdha) · "
-    "150,000 records sampled to 50,000 for deployment · Educational use only."
+    "150,000 records · Educational use only."
 )
 st.divider()
 
